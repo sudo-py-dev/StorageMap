@@ -1,5 +1,7 @@
 # Developing StorageMap
 
+Planned work is in [ROADMAP.md](ROADMAP.md).
+
 ## Build and run
 
 ```bash
