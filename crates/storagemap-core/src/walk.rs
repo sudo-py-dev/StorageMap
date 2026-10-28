@@ -6,6 +6,8 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use rayon::prelude::*;
 
@@ -37,6 +39,9 @@ pub(crate) trait Platform: Sync {
     /// Appends every entry except `.` and `..` to `out`.
     fn list(&self, dir: &Self::Dir, out: &mut Vec<RawEntry>) -> io::Result<()>;
 }
+
+/// How often a partial tree is published while the scan runs.
+const LIVE_INTERVAL: Duration = Duration::from_millis(1000);
 
 /// A scanned directory before flattening.
 struct RawDir {
@@ -77,7 +82,14 @@ pub(crate) fn walk<P: Platform>(
         filter,
         progress,
     };
-    let raw = walk_dir(&ctx, dir, root.to_path_buf(), String::new(), root_entry);
+    let raw = walk_dir(
+        &ctx,
+        dir,
+        root.to_path_buf(),
+        String::new(),
+        root_entry,
+        true,
+    );
     Ok(flatten(root.to_path_buf(), raw))
 }
 
@@ -96,6 +108,7 @@ fn walk_dir<P: Platform>(
     path: PathBuf,
     rel: String,
     me: RawEntry,
+    is_root: bool,
 ) -> RawDir {
     let (platform, filter, progress) = (ctx.platform, ctx.filter, ctx.progress);
     if progress.is_cancelled() {
@@ -114,9 +127,20 @@ fn walk_dir<P: Platform>(
     let file_bytes = files.iter().map(|f| f.info.size).sum();
     progress.add_dir(&path, files.len() as u64, file_bytes);
 
-    let subdirs = to_descend
+    let mut info = me.info;
+    info.flags.insert(flags);
+    // At the root, finished folders are kept aside so partial trees can be
+    // published for browsing while the others are still being walked.
+    let live = (is_root && progress.wants_live())
+        .then(|| Live::new(path.clone(), info, &files, &to_descend));
+    if let Some(live) = &live {
+        live.publish(progress);
+    }
+
+    let subdirs: Vec<Option<RawDir>> = to_descend
         .into_par_iter()
-        .map(|entry| {
+        .enumerate()
+        .map(|(index, entry)| {
             let child_path = path.join(name_to_os(&entry.name));
             let child_rel = if filter.needs_path() {
                 let name = String::from_utf8_lossy(&entry.name);
@@ -128,25 +152,127 @@ fn walk_dir<P: Platform>(
             } else {
                 String::new()
             };
-            match platform.open_child(&dir, &path, &entry.name) {
-                Ok(child) => walk_dir(ctx, child, child_path, child_rel, entry),
+            let walked = match platform.open_child(&dir, &path, &entry.name) {
+                Ok(child) => walk_dir(ctx, child, child_path, child_rel, entry, false),
                 Err(err) => {
                     tracing::debug!(path = %child_path.display(), %err, "cannot open directory");
                     progress.add_error();
                     RawDir::leaf(entry, Flags::ERROR)
                 }
+            };
+            match &live {
+                Some(live) => {
+                    live.finished(index, walked, progress);
+                    None
+                }
+                None => Some(walked),
             }
         })
         .collect();
     drop(dir);
 
-    let mut info = me.info;
-    info.flags.insert(flags);
+    let subdirs = match live {
+        Some(live) => live.into_dirs(),
+        None => subdirs.into_iter().flatten().collect(),
+    };
     RawDir {
         name: me.name,
         info,
         files,
         subdirs,
+    }
+}
+
+/// A top-level folder: still being walked, or finished.
+enum Slot {
+    Pending(Vec<u8>, EntryInfo),
+    Done(RawDir),
+}
+
+/// The scan root's contents while its folders are walked in parallel.
+struct Live {
+    root_path: PathBuf,
+    info: EntryInfo,
+    files: Vec<(Vec<u8>, EntryInfo)>,
+    slots: Mutex<Vec<Slot>>,
+    last_publish: Mutex<Instant>,
+}
+
+impl Live {
+    fn new(root_path: PathBuf, info: EntryInfo, files: &[RawEntry], dirs: &[RawEntry]) -> Self {
+        Live {
+            root_path,
+            info,
+            files: files.iter().map(|f| (f.name.clone(), f.info)).collect(),
+            slots: Mutex::new(
+                dirs.iter()
+                    .map(|d| Slot::Pending(d.name.clone(), d.info))
+                    .collect(),
+            ),
+            last_publish: Mutex::new(Instant::now()),
+        }
+    }
+
+    /// Stores a finished folder and publishes a partial tree when the last
+    /// one is old enough. Only one thread builds at a time.
+    fn finished(&self, index: usize, dir: RawDir, progress: &ScanProgress) {
+        if let Ok(mut slots) = self.slots.lock() {
+            slots[index] = Slot::Done(dir);
+        }
+        let Ok(mut last) = self.last_publish.try_lock() else {
+            return;
+        };
+        if last.elapsed() >= LIVE_INTERVAL {
+            self.publish(progress);
+            *last = Instant::now();
+        }
+    }
+
+    /// Builds the tree as far as it is known: finished folders in full,
+    /// the rest as empty folders marked incomplete.
+    fn publish(&self, progress: &ScanProgress) {
+        let Ok(slots) = self.slots.lock() else { return };
+        let mut builder = TreeBuilder::new(self.root_path.clone(), self.info);
+        for (name, info) in &self.files {
+            builder.push(NodeId::ROOT, name, *info);
+        }
+        for slot in slots.iter() {
+            match slot {
+                Slot::Pending(name, info) => {
+                    let mut info = *info;
+                    info.flags.insert(Flags::INCOMPLETE);
+                    builder.push(NodeId::ROOT, name, info);
+                }
+                Slot::Done(dir) => push_ref(&mut builder, NodeId::ROOT, dir),
+            }
+        }
+        drop(slots);
+        progress.publish_partial(builder.finish());
+    }
+
+    fn into_dirs(self) -> Vec<RawDir> {
+        self.slots
+            .into_inner()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|slot| match slot {
+                Slot::Done(dir) => Some(dir),
+                // Every folder is finished before the walk returns.
+                Slot::Pending(..) => None,
+            })
+            .collect()
+    }
+}
+
+/// Copies `dir` (and everything below it) under `parent`, without consuming it.
+fn push_ref(builder: &mut TreeBuilder, parent: NodeId, dir: &RawDir) {
+    let mut stack = vec![(parent, dir)];
+    while let Some((parent, dir)) = stack.pop() {
+        let id = builder.push(parent, &dir.name, dir.info);
+        for f in &dir.files {
+            builder.push(id, &f.name, f.info);
+        }
+        stack.extend(dir.subdirs.iter().map(|d| (id, d)));
     }
 }
 
@@ -306,6 +432,34 @@ mod tests {
         assert_eq!(tree.node(tree.root()).size, 10);
         assert!(tree.find(Path::new("/skip")).is_none());
         assert!(tree.find(Path::new("/keep/skip")).is_some());
+    }
+
+    #[test]
+    fn live_scan_publishes_partial_trees_and_the_same_result() {
+        let mut fs = HashMap::new();
+        fs.insert(
+            PathBuf::from("/"),
+            vec![("a", true, 0), ("b", true, 0), ("f", false, 5)],
+        );
+        fs.insert(PathBuf::from("/a"), vec![("x", false, 7)]);
+        fs.insert(PathBuf::from("/b"), vec![("y", false, 11)]);
+        let progress = ScanProgress::new();
+        progress.enable_live();
+        let tree = walk(
+            &Fake(fs),
+            Path::new("/"),
+            dir_info(0, 0),
+            &Matcher::default(),
+            &progress,
+        )
+        .expect("walk");
+        assert_eq!(tree.node(tree.root()).size, 23);
+        assert!(tree.find(Path::new("/b/y")).is_some());
+        // At least the first partial (top level only) was published.
+        let partial = progress.take_partial().expect("partial tree");
+        assert!(partial.find(Path::new("/a")).is_some());
+        assert!(partial.find(Path::new("/f")).is_some());
+        assert!(progress.take_partial().is_none());
     }
 
     #[test]

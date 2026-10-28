@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 
+use crate::tree::Tree;
+
 /// How often (in directories) the "current path" is refreshed; keeps the
 /// mutex off the hot path.
 const CURRENT_PATH_EVERY: u64 = 64;
@@ -16,6 +18,9 @@ pub struct ScanProgress {
     errors: AtomicU64,
     cancelled: AtomicBool,
     current: Mutex<PathBuf>,
+    /// Publish partial trees while scanning (see [`ScanProgress::take_partial`]).
+    live: AtomicBool,
+    partial: Mutex<Option<Tree>>,
 }
 
 /// A consistent-enough copy of the counters for display.
@@ -40,6 +45,29 @@ impl ScanProgress {
 
     pub fn is_cancelled(&self) -> bool {
         self.cancelled.load(Relaxed)
+    }
+
+    /// Asks the scan to publish partial trees for browsing while it runs.
+    /// Engines that build the tree only at the end (the NTFS table reader)
+    /// publish none.
+    pub fn enable_live(&self) {
+        self.live.store(true, Relaxed);
+    }
+
+    pub(crate) fn wants_live(&self) -> bool {
+        self.live.load(Relaxed)
+    }
+
+    /// The newest partial tree published since the last call, if any.
+    /// Folders still being scanned are marked [`crate::Flags::INCOMPLETE`].
+    pub fn take_partial(&self) -> Option<Tree> {
+        self.partial.lock().ok()?.take()
+    }
+
+    pub(crate) fn publish_partial(&self, tree: Tree) {
+        if let Ok(mut partial) = self.partial.lock() {
+            *partial = Some(tree);
+        }
     }
 
     pub fn snapshot(&self) -> ProgressSnapshot {
