@@ -20,7 +20,7 @@ Only the latest release is supported; the app updates itself.
   a download was built by this repository's release workflow:
 
   ```bash
-  gh attestation verify StorageMap-0.1.1-windows-x64-setup.exe --repo sudo-py-dev/StorageMap
+  gh attestation verify StorageMap-0.1.2-windows-x64-setup.exe --repo sudo-py-dev/StorageMap
   ```
 
 - Dependencies are checked against the RustSec advisory database on every
