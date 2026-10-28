@@ -207,15 +207,14 @@ fn item(ui: &mut Ui, env: &mut Env<'_>, tree: &Tree, id: NodeId, size: u64) {
             .max_rect(controls_rect)
             .layout(dir.end_row()),
         |ui| {
-            if ui
-                .small_button(format!(
-                    "{} {}",
-                    crate::icons::TRASH,
-                    env.t("confirm-trash")
-                ))
-                .clicked()
-            {
-                actions.push(Action::AskTrash(id));
+            let is_trash = crate::platform::trash_location(&full) == crate::platform::TrashLocation::Root;
+            let (label, action) = if is_trash {
+                (env.t("action-empty-trash"), Action::AskEmptyTrash(id))
+            } else {
+                (env.t("confirm-trash"), Action::AskTrash(id))
+            };
+            if ui.small_button(format!("{} {label}", crate::icons::TRASH)).clicked() {
+                actions.push(action);
             }
             if ui
                 .small_button(crate::icons::REVEAL)

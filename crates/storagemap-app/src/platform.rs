@@ -8,6 +8,81 @@ pub fn snapshot_dir() -> Option<std::path::PathBuf> {
     eframe::storage_dir("storagemap").map(|d| d.join("snapshots"))
 }
 
+/// Where a path sits relative to the system trash.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrashLocation {
+    /// Not a trash folder.
+    Outside,
+    /// A trash folder itself: `~/.local/share/Trash`, `.Trash-1000`, `$Recycle.Bin`.
+    Root,
+    /// Something already in the trash.
+    Inside,
+}
+
+/// Classifies `path`. Moving a trash folder (or its contents) to the trash
+/// is meaningless and fails, so the UI offers "Empty trash" instead.
+pub fn trash_location(path: &Path) -> TrashLocation {
+    let names: Vec<String> = path.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
+    let is_root = |i: usize| {
+        let name = &names[i];
+        name.eq_ignore_ascii_case("$Recycle.Bin")
+            || name.starts_with(".Trash")
+            || (name == "Trash" && i > 0 && names[i - 1] == "share")
+    };
+    match (0..names.len()).find(|&i| is_root(i)) {
+        Some(i) if i + 1 == names.len() => TrashLocation::Root,
+        Some(_) => TrashLocation::Inside,
+        None => TrashLocation::Outside,
+    }
+}
+
+/// Permanently deletes everything in the trash folder `root` (a path that
+/// `trash_location` reports as `Root`); returns the number of items removed.
+/// The folder itself and its `files`/`info` layout are kept.
+#[cfg(not(windows))]
+pub fn empty_trash(root: &Path) -> io::Result<usize> {
+    let mut count = 0;
+    for entry in std::fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            // freedesktop layout: purge `files/` and `info/` but keep them.
+            let keep = matches!(entry.file_name().to_str(), Some("files" | "info"));
+            if keep {
+                for item in std::fs::read_dir(&path)? {
+                    remove_any(&item?.path())?;
+                    count += 1;
+                }
+            } else {
+                std::fs::remove_dir_all(&path)?;
+                count += 1;
+            }
+        } else {
+            std::fs::remove_file(&path)?;
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
+#[cfg(not(windows))]
+fn remove_any(path: &Path) -> io::Result<()> {
+    match std::fs::symlink_metadata(path)?.is_dir() {
+        true => std::fs::remove_dir_all(path),
+        false => std::fs::remove_file(path),
+    }
+}
+
+/// Permanently deletes everything in the Recycle Bin; returns the number of
+/// items removed.
+#[cfg(windows)]
+pub fn empty_trash(_root: &Path) -> io::Result<usize> {
+    let items = trash::os_limited::list().map_err(io::Error::other)?;
+    let count = items.len();
+    trash::os_limited::purge_all(items).map_err(io::Error::other)?;
+    Ok(count)
+}
+
 /// Opens a file or folder with the default application.
 pub fn open(path: &Path) -> io::Result<()> {
     open::that_detached(path)
@@ -41,6 +116,40 @@ pub fn relaunch_elevated(scan_path: Option<&Path>) -> io::Result<()> {
 /// Lets a GUI-subsystem binary print to the console it was started from.
 pub fn attach_console() {
     imp::attach_console();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recognises_trash_folders() {
+        assert_eq!(trash_location(Path::new("/home/u/.local/share/Trash")), TrashLocation::Root);
+        assert_eq!(trash_location(Path::new("/home/u/.local/share/Trash/files/a.txt")), TrashLocation::Inside);
+        assert_eq!(trash_location(Path::new("/media/usb/.Trash-1000")), TrashLocation::Root);
+        #[cfg(windows)]
+        assert_eq!(trash_location(Path::new("C:\\$Recycle.Bin")), TrashLocation::Root);
+        assert_eq!(trash_location(Path::new("/home/u/Documents/Trash")), TrashLocation::Outside);
+        assert_eq!(trash_location(Path::new("/home/u/Documents")), TrashLocation::Outside);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn empties_trash_folder_in_place() {
+        let root = std::env::temp_dir().join(format!("storagemap-trash-test-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("files/dir/sub")).unwrap();
+        std::fs::create_dir_all(root.join("info")).unwrap();
+        std::fs::create_dir_all(root.join("expunged/x")).unwrap();
+        std::fs::write(root.join("files/a.txt"), "a").unwrap();
+        std::fs::write(root.join("files/dir/sub/b.txt"), "b").unwrap();
+        std::fs::write(root.join("info/a.txt.trashinfo"), "i").unwrap();
+        std::fs::write(root.join("directorysizes"), "").unwrap();
+        assert_eq!(empty_trash(&root).unwrap(), 5);
+        assert_eq!(std::fs::read_dir(root.join("files")).unwrap().count(), 0);
+        assert_eq!(std::fs::read_dir(root.join("info")).unwrap().count(), 0);
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 }
 
 #[cfg(windows)]

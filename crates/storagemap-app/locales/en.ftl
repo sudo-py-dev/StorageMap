@@ -12,7 +12,12 @@ lang-system = System default
 action-scan-folder = Scan folder…
 action-rescan = Rescan
 action-stop = Stop
-action-export-csv = Export CSV…
+action-export-csv = Export to Excel (CSV)…
+action-export-short = Export
+action-export-hint = Save this folder's contents as a CSV report that opens in Excel or any spreadsheet
+csv-bytes = Size (bytes)
+csv-allocated-bytes = On disk (bytes)
+csv-modified-utc = Modified (UTC)
 action-quit = Quit
 action-up = Up
 action-open = Open
@@ -89,6 +94,13 @@ confirm-trash = Move to trash
 cancel = Cancel
 trash-failed = Could not move to trash: { $error }
 trashed = Moved “{ $name }” to the trash
+action-empty-trash = Empty trash
+confirm-empty-title = Empty the trash?
+confirm-empty-body = Everything in the trash ({ $size }) will be deleted permanently. This cannot be undone.
+emptying-trash = Emptying the trash…
+trash-emptied = Trash emptied — { $size } freed
+empty-trash-failed = Could not empty the trash: { $error }
+already-in-trash = This item is already in the trash
 
 ## Misc
 search-hint = Search names…

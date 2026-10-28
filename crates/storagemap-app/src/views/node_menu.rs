@@ -17,7 +17,7 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, tree: &Tree, id: NodeId) {
                 "action-open" => crate::icons::OPEN,
                 "action-show-in-folder" => crate::icons::REVEAL,
                 "action-copy-path" => crate::icons::COPY,
-                "action-trash" => crate::icons::TRASH,
+                "action-trash" | "action-empty-trash" => crate::icons::TRASH,
                 _ => "",
             };
             if ui.button(format!("{icon}  {}", env.t(label))).clicked() {
@@ -31,9 +31,18 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, tree: &Tree, id: NodeId) {
         item(ui, "action-open", Action::Open(id));
         item(ui, "action-show-in-folder", Action::Reveal(id));
         item(ui, "action-copy-path", Action::CopyPath(id));
-        if id != tree.root() {
-            ui.separator();
-            item(ui, "action-trash", Action::AskTrash(id));
+        match crate::platform::trash_location(&tree.path(id)) {
+            crate::platform::TrashLocation::Root => {
+                ui.separator();
+                item(ui, "action-empty-trash", Action::AskEmptyTrash(id));
+            }
+            // Already in the trash: nothing to move.
+            crate::platform::TrashLocation::Inside => {}
+            crate::platform::TrashLocation::Outside if id != tree.root() => {
+                ui.separator();
+                item(ui, "action-trash", Action::AskTrash(id));
+            }
+            crate::platform::TrashLocation::Outside => {}
         }
     });
 }

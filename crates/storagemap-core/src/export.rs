@@ -4,28 +4,73 @@ use std::io::{self, Write};
 
 use crate::tree::{Kind, Metric, NodeId, Tree};
 
+/// The report's human-facing text, so the GUI can write it in the user's
+/// language. `Default` is the stable English, machine-friendly form.
+pub struct CsvLabels<'a> {
+    /// Column titles: path, type, size, allocated, files, folders,
+    /// percent of parent, modified (UTC). A ninth title adds a readable size
+    /// column, filled by `readable_size`.
+    pub headers: Vec<String>,
+    /// Type names: folder, file, link, other.
+    pub kinds: [String; 4],
+    /// Formats a byte count for the optional readable size column.
+    pub readable_size: Option<&'a dyn Fn(u64) -> String>,
+    /// Start with a UTF-8 byte order mark: Excel needs it to show
+    /// non-Latin names correctly.
+    pub bom: bool,
+}
+
+impl Default for CsvLabels<'_> {
+    fn default() -> Self {
+        let owned = |list: &[&str]| list.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        CsvLabels {
+            headers: owned(&[
+                "path",
+                "type",
+                "size",
+                "allocated",
+                "files",
+                "folders",
+                "percent_of_parent",
+                "modified_utc",
+            ]),
+            kinds: ["folder", "file", "link", "other"].map(str::to_owned),
+            readable_size: None,
+            bom: false,
+        }
+    }
+}
+
 /// Writes `root` and its descendants down to `max_depth` levels (0 = only
 /// `root`) as RFC 4180 CSV.
-pub fn write_csv<W: Write>(tree: &Tree, root: NodeId, max_depth: usize, out: W) -> io::Result<()> {
+pub fn write_csv<W: Write>(
+    tree: &Tree,
+    root: NodeId,
+    max_depth: usize,
+    labels: &CsvLabels,
+    out: W,
+) -> io::Result<()> {
     let mut out = io::BufWriter::new(out);
-    writeln!(
-        out,
-        "path,type,size,allocated,files,folders,percent_of_parent,modified_utc"
-    )?;
+    if labels.bom {
+        out.write_all("\u{FEFF}".as_bytes())?;
+    }
+    let header: Vec<String> = labels.headers.iter().map(|h| csv_field(h)).collect();
+    writeln!(out, "{}", header.join(","))?;
     let base_depth = tree.depth(root);
     let mut stack = vec![root];
     while let Some(id) = stack.pop() {
         let node = tree.node(id);
-        let kind = match node.kind {
-            Kind::Dir => "folder",
-            Kind::File => "file",
-            Kind::Symlink => "link",
-            Kind::Other => "other",
-        };
-        writeln!(
+        let kind = &labels.kinds[match node.kind {
+            Kind::Dir => 0,
+            Kind::File => 1,
+            Kind::Symlink => 2,
+            Kind::Other => 3,
+        }];
+        write!(
             out,
-            "{},{kind},{},{},{},{},{:.2},{}",
+            "{},{},{},{},{},{},{:.2},{}",
             csv_field(&tree.path(id).to_string_lossy()),
+            csv_field(kind),
             node.size,
             node.allocated,
             node.files,
@@ -33,6 +78,10 @@ pub fn write_csv<W: Write>(tree: &Tree, root: NodeId, max_depth: usize, out: W) 
             tree.share_of_parent(id, Metric::Size) * 100.0,
             iso_date(node.modified),
         )?;
+        if let Some(readable) = labels.readable_size {
+            write!(out, ",{}", csv_field(&readable(node.size)))?;
+        }
+        writeln!(out)?;
         if tree.depth(id) - base_depth < max_depth {
             stack.extend(tree.children(id).rev());
         }
@@ -116,8 +165,34 @@ mod tests {
         );
         let t = b.finish();
         let mut buf = Vec::new();
-        write_csv(&t, t.root(), 1, &mut buf).expect("csv");
+        write_csv(&t, t.root(), 1, &CsvLabels::default(), &mut buf).expect("csv");
         let text = String::from_utf8(buf).expect("utf8");
         assert_eq!(text.lines().count(), 3); // header, root, d
+    }
+
+    #[test]
+    fn localised_labels() {
+        let dir = EntryInfo {
+            kind: Kind::Dir,
+            flags: Flags::empty(),
+            modified: 0,
+            size: 2048,
+            allocated: 0,
+        };
+        let t = TreeBuilder::new(PathBuf::from("/r"), dir).finish();
+        let readable = |n: u64| format!("{} KB", n / 1024);
+        let labels = CsvLabels {
+            headers: ["נתיב", "סוג", "a", "b", "c", "d", "e", "f", "גודל"].map(str::to_owned).to_vec(),
+            kinds: ["תיקייה", "קובץ", "קישור", "אחר"].map(str::to_owned),
+            readable_size: Some(&readable),
+            bom: true,
+        };
+        let mut buf = Vec::new();
+        write_csv(&t, t.root(), 0, &labels, &mut buf).expect("csv");
+        let text = String::from_utf8(buf).expect("utf8");
+        let mut lines = text.lines();
+        assert_eq!(lines.next(), Some("\u{FEFF}נתיב,סוג,a,b,c,d,e,f,גודל"));
+        assert!(lines.next().expect("row").ends_with(",2 KB"));
+        assert!(text.contains(",תיקייה,"));
     }
 }

@@ -21,6 +21,8 @@ use crate::update::Updater;
 use crate::widgets::{paragraph, row};
 
 const OPEN: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::O);
+/// Width of drop-down menus.
+const MENU_WIDTH: f32 = 240.0;
 const EXPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::E);
 const FIND: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::F);
 const SETTINGS: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Comma);
@@ -84,7 +86,9 @@ pub fn icon_button(ui: &mut Ui, icon: &str, tooltip: &str) -> egui::Response {
 
 /// Menu contents aligned to the reading-start edge.
 fn menu_column<R>(dir: Direction, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
-    ui.set_min_width(220.0);
+    // A fixed width: an end-aligned (RTL) layout otherwise stretches the
+    // popup across all the space it is offered.
+    ui.set_width(MENU_WIDTH);
     ui.with_layout(Layout::top_down_justified(dir.start()), add)
         .inner
 }
@@ -363,6 +367,17 @@ fn toolbar(app: &mut App, ui: &mut Ui) {
                     .clicked()
                 {
                     actions.push(Action::Rescan);
+                }
+                if ui
+                    .button(format!(
+                        "{}  {}",
+                        crate::icons::EXPORT,
+                        i18n.t("action-export-short")
+                    ))
+                    .on_hover_text(i18n.t("action-export-hint"))
+                    .clicked()
+                {
+                    actions.push(Action::ExportCsv);
                 }
             }
         }
@@ -878,6 +893,33 @@ pub fn modals(app: &mut App, ctx: &egui::Context) {
             app.actions.push(Action::CancelTrash);
         }
     }
+    if let (Some(id), Some(scan)) = (app.confirm_empty, &app.scan) {
+        let i = &app.i18n;
+        let size = fmt::size(scan.tree.node(id).size, app.settings.unit, 1, |k| i.logical(k));
+        let body = i.la("confirm-empty-body", &[("size", size.into())]);
+        let modal = Modal::new(Id::unique("confirm-empty-trash")).show(ctx, |ui| {
+            ui.set_width(440.0);
+            ui.with_layout(Layout::top_down(i.dir().start()), |ui| {
+                ui.heading(format!("{}  {}", crate::icons::TRASH, i.t("confirm-empty-title")));
+                ui.add_space(4.0);
+                paragraph(ui, i, &body);
+                ui.add_space(12.0);
+                row(ui, i.dir(), |ui| {
+                    let danger = egui::Button::new(RichText::new(i.t("action-empty-trash")).color(Color32::WHITE))
+                        .fill(ui.visuals().error_fg_color);
+                    if ui.add(danger).clicked() {
+                        app.actions.push(Action::ConfirmEmptyTrash);
+                    }
+                    if ui.button(i.t("cancel")).clicked() {
+                        app.actions.push(Action::CancelEmptyTrash);
+                    }
+                });
+            });
+        });
+        if modal.should_close() {
+            app.actions.push(Action::CancelEmptyTrash);
+        }
+    }
     if app.show_about {
         app.show_about = false;
         app.settings_section = super::settings::Section::About;
@@ -938,7 +980,7 @@ pub fn keyboard(app: &mut App, ctx: &egui::Context) {
     {
         scan.focus_search = true;
     }
-    if ctx.egui_wants_keyboard_input() || app.confirm_trash.is_some() || app.show_settings {
+    if ctx.egui_wants_keyboard_input() || app.confirm_trash.is_some() || app.confirm_empty.is_some() || app.show_settings {
         return;
     }
     let key = |k: Key| ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));

@@ -62,6 +62,9 @@ pub enum Action {
     /// Don't announce this version again (manual checks still show it).
     SkipUpdate(String),
     RestartApp,
+    AskEmptyTrash(NodeId),
+    ConfirmEmptyTrash,
+    CancelEmptyTrash,
 }
 
 pub struct Toast {
@@ -94,6 +97,10 @@ pub struct App {
     pub scan: Option<ScanView>,
     pub toast: Option<Toast>,
     pub confirm_trash: Option<NodeId>,
+    /// A trash folder the user may empty, waiting for confirmation.
+    pub confirm_empty: Option<NodeId>,
+    /// Emptying in progress: the trash folder, its size, and the result.
+    emptying: Option<(NodeId, u64, std::sync::mpsc::Receiver<std::io::Result<usize>>)>,
     pub show_about: bool,
     pub elevated: bool,
     pub actions: Vec<Action>,
@@ -127,6 +134,8 @@ impl App {
             scan: None,
             toast: None,
             confirm_trash: None,
+            confirm_empty: None,
+            emptying: None,
             show_about: false,
             elevated: platform::is_elevated(),
             actions: Vec::new(),
@@ -264,10 +273,20 @@ impl App {
                 }
             }
             Action::AskTrash(id) => {
-                if self.scan.as_ref().is_some_and(|s| s.tree.root() != id) {
-                    self.confirm_trash = Some(id);
+                let Some(path) = self.path_of(id) else { return };
+                match platform::trash_location(&path) {
+                    platform::TrashLocation::Root => self.confirm_empty = Some(id),
+                    platform::TrashLocation::Inside => self.notify(self.i18n.t("already-in-trash"), true),
+                    platform::TrashLocation::Outside => {
+                        if self.scan.as_ref().is_some_and(|s| s.tree.root() != id) {
+                            self.confirm_trash = Some(id);
+                        }
+                    }
                 }
             }
+            Action::AskEmptyTrash(id) => self.confirm_empty = Some(id),
+            Action::CancelEmptyTrash => self.confirm_empty = None,
+            Action::ConfirmEmptyTrash => self.start_emptying(ctx),
             Action::ConfirmTrash => self.trash_confirmed(),
             Action::CancelTrash => self.confirm_trash = None,
             Action::ScanSubtree(id) => {
@@ -420,8 +439,29 @@ impl App {
         else {
             return;
         };
+        let i = &self.i18n;
+        let unit = self.settings.unit;
+        let readable = |bytes: u64| fmt::size(bytes, unit, 1, |k| i.logical(k));
+        let labels = storagemap_core::export::CsvLabels {
+            headers: [
+                "col-path",
+                "col-type",
+                "csv-bytes",
+                "csv-allocated-bytes",
+                "col-files",
+                "col-folders",
+                "col-percent",
+                "csv-modified-utc",
+                "col-size",
+            ]
+            .map(|id| i.logical(id))
+            .to_vec(),
+            kinds: ["type-folder", "type-file", "type-link", "type-other"].map(|id| i.logical(id)),
+            readable_size: Some(&readable),
+            bom: true,
+        };
         let result = std::fs::File::create(&target).and_then(|f| {
-            storagemap_core::export::write_csv(&scan.tree, scan.focus, CSV_EXPORT_DEPTH, f)
+            storagemap_core::export::write_csv(&scan.tree, scan.focus, CSV_EXPORT_DEPTH, &labels, f)
         });
         let text = match &result {
             Ok(()) => self
@@ -498,6 +538,58 @@ impl App {
         }
     }
 
+    /// Empties the trash on a worker thread: it can hold many gigabytes.
+    fn start_emptying(&mut self, ctx: &egui::Context) {
+        let (Some(id), Some(scan)) = (self.confirm_empty.take(), &self.scan) else { return };
+        let size = scan.tree.node(id).size;
+        let path = scan.tree.path(id);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = ctx.clone();
+        let spawned = std::thread::Builder::new().name("storagemap-empty-trash".into()).spawn(move || {
+            let _ = tx.send(platform::empty_trash(&path));
+            ctx.request_repaint();
+        });
+        match spawned {
+            Ok(_) => {
+                self.emptying = Some((id, size, rx));
+                self.notify(self.i18n.t("emptying-trash"), false);
+            }
+            Err(e) => self.notify(self.i18n.v(&e.to_string()), true),
+        }
+    }
+
+    fn poll_emptying(&mut self, ctx: &egui::Context) {
+        let Some((id, size, rx)) = &self.emptying else { return };
+        let result = match rx.try_recv() {
+            Ok(result) => result,
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                ctx.request_repaint_after(PROGRESS_REFRESH);
+                return;
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => Err(std::io::Error::other("stopped")),
+        };
+        let (id, size) = (*id, *size);
+        self.emptying = None;
+        match result {
+            Ok(_) => {
+                // The folder stays; everything inside it is gone.
+                if let Some(scan) = &mut self.scan {
+                    let children: Vec<NodeId> = scan.tree.children(id).collect();
+                    for child in children {
+                        scan.remove(child);
+                    }
+                }
+                let freed = fmt::size(size, self.settings.unit, 1, |k| self.i18n.logical(k));
+                let text = self.i18n.ta("trash-emptied", &[("size", freed.into())]);
+                self.notify(text, false);
+            }
+            Err(e) => {
+                let text = self.i18n.ta("empty-trash-failed", &[("error", e.to_string().into())]);
+                self.notify(text, true);
+            }
+        }
+    }
+
     fn poll_updater(&mut self, ctx: &egui::Context) {
         self.updater.poll();
         if matches!(
@@ -547,6 +639,7 @@ impl eframe::App for App {
         }
         self.size_window_on_first_launch(&ctx);
         self.poll_updater(&ctx);
+        self.poll_emptying(&ctx);
         // Ctrl +/- zoom is built into egui; remember whatever the user picked.
         self.settings.ui_scale = ctx.zoom_factor();
 

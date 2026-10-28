@@ -12,7 +12,12 @@ lang-system = ברירת המחדל של המערכת
 action-scan-folder = סריקת תיקייה…
 action-rescan = סריקה מחדש
 action-stop = עצירה
-action-export-csv = ייצוא ל־CSV…
+action-export-csv = ייצוא ל־Excel ‏(CSV)…
+action-export-short = ייצוא
+action-export-hint = שמירת תוכן התיקייה כדוח CSV שנפתח ב־Excel או בכל גיליון אלקטרוני
+csv-bytes = גודל (בתים)
+csv-allocated-bytes = בדיסק (בתים)
+csv-modified-utc = תאריך שינוי (UTC)
 action-quit = יציאה
 action-up = למעלה
 action-open = פתיחה
@@ -89,6 +94,13 @@ confirm-trash = העברה לאשפה
 cancel = ביטול
 trash-failed = לא ניתן היה להעביר לאשפה: { $error }
 trashed = „{ $name }” הועבר לאשפה
+action-empty-trash = ריקון האשפה
+confirm-empty-title = לרוקן את האשפה?
+confirm-empty-body = כל מה שבאשפה ({ $size }) יימחק לצמיתות. לא ניתן לבטל פעולה זו.
+emptying-trash = מרוקן את האשפה…
+trash-emptied = האשפה רוקנה — פונו { $size }
+empty-trash-failed = לא ניתן היה לרוקן את האשפה: { $error }
+already-in-trash = הפריט כבר נמצא באשפה
 
 ## Misc
 search-hint = חיפוש לפי שם…

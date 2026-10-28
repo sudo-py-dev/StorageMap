@@ -12,7 +12,12 @@ lang-system = لغة النظام
 action-scan-folder = فحص مجلد…
 action-rescan = إعادة الفحص
 action-stop = إيقاف
-action-export-csv = تصدير CSV…
+action-export-csv = تصدير إلى Excel ‏(CSV)…
+action-export-short = تصدير
+action-export-hint = حفظ محتويات هذا المجلد كتقرير CSV يُفتح في Excel أو أي جدول بيانات
+csv-bytes = الحجم (بايت)
+csv-allocated-bytes = على القرص (بايت)
+csv-modified-utc = تاريخ التعديل (UTC)
 action-quit = خروج
 action-up = لأعلى
 action-open = فتح
@@ -91,6 +96,13 @@ confirm-trash = نقل إلى السلة
 cancel = إلغاء
 trash-failed = تعذّر النقل إلى سلة المحذوفات: { $error }
 trashed = تم نقل «{ $name }» إلى سلة المحذوفات
+action-empty-trash = إفراغ سلة المحذوفات
+confirm-empty-title = إفراغ سلة المحذوفات؟
+confirm-empty-body = سيتم حذف كل ما في سلة المحذوفات ({ $size }) نهائيًا. لا يمكن التراجع عن ذلك.
+emptying-trash = جارٍ إفراغ سلة المحذوفات…
+trash-emptied = تم إفراغ سلة المحذوفات — تم تحرير { $size }
+empty-trash-failed = تعذّر إفراغ سلة المحذوفات: { $error }
+already-in-trash = هذا العنصر موجود بالفعل في سلة المحذوفات
 
 ## Misc
 search-hint = البحث بالاسم…

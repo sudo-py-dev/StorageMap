@@ -1,5 +1,5 @@
 ; Inno Setup script for StorageMap.
-; Build: iscc /DAppVersion=0.1.0 installer\windows\storagemap.iss
+; Build: iscc /DAppVersion=0.1.1 installer\windows\storagemap.iss
 ; Installs per user by default (no UAC prompt), like modern TreeSize;
 ; the user can still choose an all-users install in the dialog.
 

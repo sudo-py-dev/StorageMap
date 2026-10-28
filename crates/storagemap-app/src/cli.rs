@@ -166,6 +166,7 @@ pub fn run(args: &Args) -> ExitCode {
                 tree,
                 tree.root(),
                 args.depth.unwrap_or(DEFAULT_CSV_DEPTH),
+                &export::CsvLabels::default(),
                 f,
             )
         });
