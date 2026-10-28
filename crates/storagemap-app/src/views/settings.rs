@@ -10,7 +10,7 @@ use crate::platform;
 use crate::settings::{MAX_TREEMAP_DEPTH, Settings, Theme};
 use crate::theme;
 use crate::update::{self, Updater};
-use crate::widgets::paragraph_small;
+use crate::widgets::{self, paragraph_small};
 
 const WINDOW_SIZE: egui::Vec2 = vec2(780.0, 520.0);
 const NAV_WIDTH: f32 = 180.0;
@@ -327,7 +327,7 @@ fn scanning(
 fn integration(ui: &mut Ui, i18n: &I18n, actions: &mut Vec<Action>) {
     paragraph_small(ui, i18n, &i18n.logical("integration-hint"));
     ui.add_space(8.0);
-    ui.with_layout(i18n.dir().row(), |ui| {
+    widgets::row(ui, i18n.dir(), |ui| {
         if ui
             .add(theme::primary_button(i18n.t("action-integrate")))
             .clicked()
@@ -382,7 +382,7 @@ pub fn status(ui: &mut Ui, i18n: &I18n, updater: &Updater, actions: &mut Vec<Act
     match updater {
         Updater::Idle => {}
         Updater::Checking(_) => {
-            ui.with_layout(i18n.dir().row(), |ui| {
+            widgets::row(ui, i18n.dir(), |ui| {
                 ui.spinner();
                 ui.label(i18n.t("update-checking"));
             });
@@ -401,7 +401,7 @@ pub fn status(ui: &mut Ui, i18n: &I18n, updater: &Updater, actions: &mut Vec<Act
                 ))
                 .strong(),
             );
-            ui.with_layout(i18n.dir().row(), |ui| {
+            widgets::row(ui, i18n.dir(), |ui| {
                 let install_id = if release.installable() {
                     "update-install"
                 } else {

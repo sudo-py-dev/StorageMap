@@ -45,13 +45,48 @@ pub fn visual(text: &str, base: Direction) -> String {
         .map(|line| {
             let info = BidiInfo::new(line, Some(level));
             let reordered = match info.paragraphs.first() {
-                Some(para) => info.reorder_line(para, para.range.clone()).into_owned(),
+                Some(para) => reorder_mirrored(&info, para),
                 None => line.to_owned(),
             };
             restore_rtl_runs(&strip_controls(&reordered))
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Puts `para` in visual order (UAX #9 L2) and mirrors brackets inside
+/// right-to-left runs (L4), which `unicode_bidi` leaves to the caller.
+fn reorder_mirrored(info: &BidiInfo, para: &unicode_bidi::ParagraphInfo) -> String {
+    let (levels, runs) = info.visual_runs(para, para.range.clone());
+    let mut out = String::with_capacity(para.range.len());
+    for run in runs {
+        let text = &info.text[run.clone()];
+        if levels[run.start].is_rtl() {
+            out.extend(text.chars().rev().map(mirror));
+        } else {
+            out.push_str(text);
+        }
+    }
+    out
+}
+
+/// The mirrored form of a paired bracket, as drawn in right-to-left text.
+fn mirror(c: char) -> char {
+    match c {
+        '(' => ')',
+        ')' => '(',
+        '[' => ']',
+        ']' => '[',
+        '{' => '}',
+        '}' => '{',
+        '<' => '>',
+        '>' => '<',
+        '«' => '»',
+        '»' => '«',
+        '‹' => '›',
+        '›' => '‹',
+        other => other,
+    }
 }
 
 /// Reverses each maximal run of RTL characters back to logical order; the
@@ -84,6 +119,16 @@ fn strip_controls(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn brackets_are_mirrored_in_rtl_runs() {
+        // Drawn left to right: "…(CSV) Excel־ל" + "ייצוא" shaped back.
+        let v = visual("ייצוא ל־Excel \u{200F}(CSV)…", Direction::Rtl);
+        assert!(v.contains("(CSV)"), "{v:?}");
+        assert!(!v.contains(")CSV("), "{v:?}");
+        // An LTR paragraph is not mirrored.
+        assert_eq!(visual("Size (גודל)", Direction::Ltr), "Size (גודל)");
+    }
 
     #[test]
     fn latin_text_is_untouched() {
