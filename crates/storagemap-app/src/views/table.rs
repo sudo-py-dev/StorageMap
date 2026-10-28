@@ -4,6 +4,7 @@ use egui::{FontId, Response, RichText, Sense, Ui, vec2};
 use egui_extras::{Column, TableBuilder};
 
 use super::Env;
+use crate::app::Action;
 use crate::widgets::{paint_text, share_bar};
 
 pub const ROW_HEIGHT: f32 = 22.0;
@@ -12,6 +13,7 @@ const HEADER_HEIGHT: f32 = 24.0;
 const FLEX_MIN_WIDTH: f32 = 160.0;
 
 /// Column description in *logical* order; RTL reverses the display order.
+/// `title_id` doubles as the column's stable id in the user's preferences.
 #[derive(Debug, Clone, Copy)]
 pub struct Col {
     pub title_id: &'static str,
@@ -39,9 +41,17 @@ impl Col {
     }
 }
 
-/// Logical indices of the columns that fit in `available`, in logical order.
-fn visible_columns(cols: &[Col], available: f32, spacing: f32) -> Vec<usize> {
-    let mut by_priority: Vec<usize> = (0..cols.len()).collect();
+/// Logical indices of the columns that are not `hidden` and fit in
+/// `available`, in logical order. The flexible column is always shown.
+fn visible_columns(
+    cols: &[Col],
+    available: f32,
+    spacing: f32,
+    hidden: impl Fn(&Col) -> bool,
+) -> Vec<usize> {
+    let mut by_priority: Vec<usize> = (0..cols.len())
+        .filter(|&i| cols[i].width.is_none() || !hidden(&cols[i]))
+        .collect();
     by_priority.sort_by_key(|&i| cols[i].priority);
     let mut budget = available - FLEX_MIN_WIDTH;
     let mut shown: Vec<usize> = by_priority
@@ -74,15 +84,19 @@ pub trait TableSource {
     }
 }
 
+/// Draws the table. `salt` identifies it in the user's column preferences.
 pub fn show(
     ui: &mut Ui,
     env: &mut Env<'_>,
-    salt: &str,
+    salt: &'static str,
     cols: &[Col],
     source: &mut dyn TableSource,
 ) {
     let spacing = ui.spacing().item_spacing.x;
-    let mut order = visible_columns(cols, ui.available_width(), spacing);
+    let settings = env.settings;
+    let mut order = visible_columns(cols, ui.available_width(), spacing, |c| {
+        settings.column_hidden(salt, c.title_id)
+    });
     if env.i18n.is_rtl() {
         order.reverse();
     }
@@ -109,12 +123,12 @@ pub fn show(
                         None => "",
                     };
                     let title = format!("{}{arrow}", env.t(cols[c].title_id));
-                    if ui
-                        .add(egui::Label::new(RichText::new(title).strong()).sense(Sense::click()))
-                        .clicked()
-                    {
+                    let response = ui
+                        .add(egui::Label::new(RichText::new(title).strong()).sense(Sense::click()));
+                    if response.clicked() {
                         source.header_clicked(c);
                     }
+                    response.context_menu(|ui| column_menu(ui, env, salt, cols));
                 });
             }
         })
@@ -129,6 +143,17 @@ pub fn show(
                 source.row_response(env, index, &response);
             });
         });
+}
+
+/// Checkboxes for every column that can be hidden.
+fn column_menu(ui: &mut Ui, env: &mut Env<'_>, salt: &'static str, cols: &[Col]) {
+    ui.label(RichText::new(env.t("columns-menu")).weak());
+    for col in cols.iter().filter(|c| c.width.is_some()) {
+        let mut shown = !env.settings.column_hidden(salt, col.title_id);
+        if ui.checkbox(&mut shown, env.t(col.title_id)).changed() {
+            env.push(Action::ToggleColumn(salt, col.title_id));
+        }
+    }
 }
 
 /// Single-line text filling the cell, elided in logical order.
@@ -191,8 +216,15 @@ mod tests {
 
     #[test]
     fn hides_lowest_priority_columns_first() {
-        assert_eq!(visible_columns(&COLS, 1000.0, 0.0), [0, 1, 2, 3]);
-        assert_eq!(visible_columns(&COLS, 400.0, 0.0), [0, 1, 3]);
-        assert_eq!(visible_columns(&COLS, 100.0, 0.0), [0]);
+        let none = |_: &Col| false;
+        assert_eq!(visible_columns(&COLS, 1000.0, 0.0, none), [0, 1, 2, 3]);
+        assert_eq!(visible_columns(&COLS, 400.0, 0.0, none), [0, 1, 3]);
+        assert_eq!(visible_columns(&COLS, 100.0, 0.0, none), [0]);
+    }
+
+    #[test]
+    fn hidden_columns_are_left_out_but_never_the_flexible_one() {
+        let hide = |c: &Col| matches!(c.title_id, "a" | "b");
+        assert_eq!(visible_columns(&COLS, 1000.0, 0.0, hide), [0, 2, 3]);
     }
 }

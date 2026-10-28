@@ -55,6 +55,7 @@ tab-ages = Age
 tab-search = Search
 
 ## Columns
+columns-menu = Columns
 col-name = Name
 col-size = Size
 col-allocated = On disk

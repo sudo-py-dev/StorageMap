@@ -56,6 +56,8 @@ pub enum Action {
     BrowseSnapshot,
     ClearComparison,
     SetDuplicateMinSize(u64),
+    /// Show or hide a column of a table: (table id, column title id).
+    ToggleColumn(&'static str, &'static str),
     OpenSettings,
     CheckUpdates,
     InstallUpdate,
@@ -357,6 +359,7 @@ impl App {
             }
             Action::ClearComparison => self.with_scan(|s| s.comparison = None),
             Action::SetDuplicateMinSize(size) => self.settings.duplicate_min_size = size,
+            Action::ToggleColumn(table, column) => self.settings.toggle_column(table, column),
             Action::OpenSettings => self.show_settings = true,
             Action::CheckUpdates => {
                 self.update_dismissed = false;

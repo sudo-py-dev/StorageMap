@@ -1,5 +1,6 @@
 //! User preferences, persisted by eframe between runs.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -77,6 +78,8 @@ pub struct Settings {
     pub export_readable: bool,
     /// Files and folders every scan leaves out or limits itself to.
     pub scan_filter: ScanFilter,
+    /// Columns the user hid, by table id, as column title ids.
+    pub hidden_columns: BTreeMap<String, Vec<String>>,
 }
 
 impl Default for Settings {
@@ -103,6 +106,7 @@ impl Default for Settings {
             export_include: Include::All,
             export_readable: true,
             scan_filter: ScanFilter::default(),
+            hidden_columns: BTreeMap::new(),
         }
     }
 }
@@ -110,6 +114,24 @@ impl Default for Settings {
 impl Settings {
     pub fn effective_lang(&self) -> Lang {
         self.lang.unwrap_or_else(Lang::system)
+    }
+
+    pub fn column_hidden(&self, table: &str, column: &str) -> bool {
+        self.hidden_columns
+            .get(table)
+            .is_some_and(|cols| cols.iter().any(|c| c == column))
+    }
+
+    pub fn toggle_column(&mut self, table: &str, column: &str) {
+        let cols = self.hidden_columns.entry(table.to_owned()).or_default();
+        if let Some(i) = cols.iter().position(|c| c == column) {
+            cols.remove(i);
+        } else {
+            cols.push(column.to_owned());
+        }
+        if cols.is_empty() {
+            self.hidden_columns.remove(table);
+        }
     }
 
     pub fn remember(&mut self, path: PathBuf) {
@@ -139,6 +161,17 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn columns_toggle_per_table() {
+        let mut s = Settings::default();
+        s.toggle_column("details", "col-type");
+        assert!(s.column_hidden("details", "col-type"));
+        assert!(!s.column_hidden("search", "col-type"));
+        s.toggle_column("details", "col-type");
+        assert!(!s.column_hidden("details", "col-type"));
+        assert!(s.hidden_columns.is_empty());
     }
 
     #[test]

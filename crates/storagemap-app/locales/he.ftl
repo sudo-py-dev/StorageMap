@@ -55,6 +55,7 @@ tab-ages = גיל
 tab-search = חיפוש
 
 ## Columns
+columns-menu = עמודות
 col-name = שם
 col-size = גודל
 col-allocated = בדיסק

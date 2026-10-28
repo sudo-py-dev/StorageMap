@@ -55,6 +55,7 @@ tab-ages = العمر
 tab-search = بحث
 
 ## Columns
+columns-menu = الأعمدة
 col-name = الاسم
 col-size = الحجم
 col-allocated = على القرص
