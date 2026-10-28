@@ -57,6 +57,7 @@ pub struct Settings {
     pub treemap_labels: bool,
     /// Colour the names of items that take an unusually large share.
     pub highlight_large: bool,
+    pub chart_style: crate::views::chart::Style,
     pub cross_filesystems: bool,
     pub prefer_mft: bool,
     pub recent: Vec<PathBuf>,
@@ -96,6 +97,7 @@ impl Default for Settings {
             treemap_files: true,
             treemap_labels: true,
             highlight_large: true,
+            chart_style: crate::views::chart::Style::Donut,
             cross_filesystems: false,
             prefer_mft: true,
             recent: Vec::new(),

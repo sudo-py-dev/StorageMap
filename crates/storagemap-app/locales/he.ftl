@@ -55,6 +55,14 @@ tab-details = פרטים
 tab-top-files = הקבצים הגדולים
 tab-types = סוגי קבצים
 tab-ages = גיל
+tab-chart = תרשים
+chart-donut = טבעת
+chart-bars = עמודות
+chart-other =
+    { $count ->
+        [one] פריט אחר
+       *[other] { $n } פריטים אחרים
+    }
 tab-search = חיפוש
 
 ## Columns

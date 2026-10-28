@@ -55,6 +55,18 @@ tab-details = التفاصيل
 tab-top-files = أكبر الملفات
 tab-types = أنواع الملفات
 tab-ages = العمر
+tab-chart = مخطط
+chart-donut = حلقي
+chart-bars = أشرطة
+chart-other =
+    { $count ->
+        [zero] لا عناصر أخرى
+        [one] عنصر آخر
+        [two] عنصران آخران
+        [few] { $n } عناصر أخرى
+        [many] { $n } عنصرًا آخر
+       *[other] { $n } عنصر آخر
+    }
 tab-search = بحث
 
 ## Columns

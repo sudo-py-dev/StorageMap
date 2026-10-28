@@ -11,7 +11,8 @@ use storagemap_core::export::Include;
 use storagemap_core::{Backend, Metric};
 
 use super::{
-    Env, ScanView, Tab, changes, cleanup, details, duplicates, lists, start, tree_panel, treemap,
+    Env, ScanView, Tab, changes, chart, cleanup, details, duplicates, lists, start, tree_panel,
+    treemap,
 };
 use crate::app::{Action, App, seconds};
 use crate::fmt;
@@ -658,6 +659,7 @@ fn central_view(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         Tab::Changes => changes::show(ui, env, scan),
         Tab::Duplicates => duplicates::show(ui, env, scan),
         Tab::Cleanup => cleanup::show(ui, env, scan),
+        Tab::Chart => chart::show(ui, env, scan),
     }
 }
 

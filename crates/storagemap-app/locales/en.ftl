@@ -55,6 +55,14 @@ tab-details = Details
 tab-top-files = Largest files
 tab-types = File types
 tab-ages = Age
+tab-chart = Chart
+chart-donut = Donut
+chart-bars = Bars
+chart-other =
+    { $count ->
+        [one] 1 other item
+       *[other] { $n } other items
+    }
 tab-search = Search
 
 ## Columns

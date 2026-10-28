@@ -64,6 +64,7 @@ pub enum Action {
     SetDuplicateMinSize(u64),
     /// Show or hide a column of a table: (table id, column title id).
     ToggleColumn(&'static str, &'static str),
+    SetChartStyle(crate::views::chart::Style),
     OpenSettings,
     CheckUpdates,
     InstallUpdate,
@@ -370,6 +371,7 @@ impl App {
             Action::ClearComparison => self.with_scan(|s| s.comparison = None),
             Action::SetDuplicateMinSize(size) => self.settings.duplicate_min_size = size,
             Action::ToggleColumn(table, column) => self.settings.toggle_column(table, column),
+            Action::SetChartStyle(style) => self.settings.chart_style = style,
             Action::OpenSettings => self.show_settings = true,
             Action::CheckUpdates => {
                 self.update_dismissed = false;

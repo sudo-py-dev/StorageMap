@@ -2,6 +2,7 @@
 //! [`Action`]s; only the app applies them.
 
 mod changes;
+pub mod chart;
 pub mod chrome;
 mod cleanup;
 mod details;
@@ -100,11 +101,13 @@ pub enum Tab {
     Changes,
     Duplicates,
     Cleanup,
+    Chart,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 9] = [
+    pub const ALL: [Tab; 10] = [
         Tab::Treemap,
+        Tab::Chart,
         Tab::Details,
         Tab::Cleanup,
         Tab::TopFiles,
@@ -127,6 +130,7 @@ impl Tab {
             Tab::Changes => icons::CHANGES,
             Tab::Duplicates => icons::DUPLICATES,
             Tab::Cleanup => icons::CLEANUP,
+            Tab::Chart => icons::CHART_DONUT,
         }
     }
 
@@ -141,6 +145,7 @@ impl Tab {
             Tab::Changes => "tab-changes",
             Tab::Duplicates => "tab-duplicates",
             Tab::Cleanup => "tab-cleanup",
+            Tab::Chart => "tab-chart",
         }
     }
 }
@@ -206,6 +211,7 @@ pub struct ScanView {
     pub(super) ages: Cached<(NodeId, u64), [AgeStat; 7]>,
     pub(super) search: Cached<(NodeId, String, u64), Vec<NodeId>>,
     pub(super) details_rows: Cached<(NodeId, details::Sort, u64), Vec<NodeId>>,
+    pub(super) chart: Cached<(NodeId, Metric, u64), Vec<chart::Slice>>,
     /// Active comparison with an earlier snapshot.
     pub comparison: Option<Comparison>,
     /// Earlier snapshots of this folder, newest first.
@@ -247,6 +253,7 @@ impl ScanView {
             ages: Cached::default(),
             search: Cached::default(),
             details_rows: Cached::default(),
+            chart: Cached::default(),
             comparison: None,
             snapshots: Vec::new(),
             change_rows: Cached::default(),
