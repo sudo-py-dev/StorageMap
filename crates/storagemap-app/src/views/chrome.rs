@@ -906,18 +906,26 @@ pub fn modals(app: &mut App, ctx: &egui::Context) {
     }
     if let (Some(id), Some(scan)) = (app.confirm_empty, &app.scan) {
         let i = &app.i18n;
-        let size = fmt::size(scan.tree.node(id).size, app.settings.unit, 1, |k| i.logical(k));
+        let size = fmt::size(scan.tree.node(id).size, app.settings.unit, 1, |k| {
+            i.logical(k)
+        });
         let body = i.la("confirm-empty-body", &[("size", size.into())]);
         let modal = Modal::new(Id::unique("confirm-empty-trash")).show(ctx, |ui| {
             ui.set_width(440.0);
             ui.with_layout(Layout::top_down(i.dir().start()), |ui| {
-                ui.heading(format!("{}  {}", crate::icons::TRASH, i.t("confirm-empty-title")));
+                ui.heading(format!(
+                    "{}  {}",
+                    crate::icons::TRASH,
+                    i.t("confirm-empty-title")
+                ));
                 ui.add_space(4.0);
                 paragraph(ui, i, &body);
                 ui.add_space(12.0);
                 row(ui, i.dir(), |ui| {
-                    let danger = egui::Button::new(RichText::new(i.t("action-empty-trash")).color(Color32::WHITE))
-                        .fill(ui.visuals().error_fg_color);
+                    let danger = egui::Button::new(
+                        RichText::new(i.t("action-empty-trash")).color(Color32::WHITE),
+                    )
+                    .fill(ui.visuals().error_fg_color);
                     if ui.add(danger).clicked() {
                         app.actions.push(Action::ConfirmEmptyTrash);
                     }
@@ -940,7 +948,12 @@ pub fn modals(app: &mut App, ctx: &egui::Context) {
 
 /// What the CSV report lists and how sizes are written, asked before saving.
 fn export_options(app: &mut App, ctx: &egui::Context) {
-    let App { i18n: i, settings, actions, .. } = app;
+    let App {
+        i18n: i,
+        settings,
+        actions,
+        ..
+    } = app;
     let modal = Modal::new(Id::unique("export-options")).show(ctx, |ui| {
         ui.set_width(440.0);
         ui.with_layout(Layout::top_down(i.dir().start()), |ui| {
@@ -959,8 +972,16 @@ fn export_options(app: &mut App, ctx: &egui::Context) {
             ui.add_space(8.0);
             ui.label(RichText::new(i.t("export-sizes")).strong());
             row(ui, i.dir(), |ui| {
-                ui.selectable_value(&mut settings.export_readable, true, i.t("export-sizes-readable"));
-                ui.selectable_value(&mut settings.export_readable, false, i.t("export-sizes-bytes"));
+                ui.selectable_value(
+                    &mut settings.export_readable,
+                    true,
+                    i.t("export-sizes-readable"),
+                );
+                ui.selectable_value(
+                    &mut settings.export_readable,
+                    false,
+                    i.t("export-sizes-bytes"),
+                );
             });
             ui.add_space(14.0);
             row(ui, i.dir(), |ui| {
@@ -1035,7 +1056,8 @@ pub fn keyboard(app: &mut App, ctx: &egui::Context) {
         }
         scan.focus_search = true;
     }
-    if ctx.egui_wants_keyboard_input() || app.confirm_trash.is_some()
+    if ctx.egui_wants_keyboard_input()
+        || app.confirm_trash.is_some()
         || app.confirm_empty.is_some()
         || app.show_export
         || app.show_settings

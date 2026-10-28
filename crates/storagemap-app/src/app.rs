@@ -103,7 +103,11 @@ pub struct App {
     /// A trash folder the user may empty, waiting for confirmation.
     pub confirm_empty: Option<NodeId>,
     /// Emptying in progress: the trash folder, its size, and the result.
-    emptying: Option<(NodeId, u64, std::sync::mpsc::Receiver<std::io::Result<usize>>)>,
+    emptying: Option<(
+        NodeId,
+        u64,
+        std::sync::mpsc::Receiver<std::io::Result<usize>>,
+    )>,
     pub show_about: bool,
     /// The CSV export options dialog is open.
     pub show_export: bool,
@@ -280,7 +284,9 @@ impl App {
                 let Some(path) = self.path_of(id) else { return };
                 match platform::trash_location(&path) {
                     platform::TrashLocation::Root => self.confirm_empty = Some(id),
-                    platform::TrashLocation::Inside => self.notify(self.i18n.t("already-in-trash"), true),
+                    platform::TrashLocation::Inside => {
+                        self.notify(self.i18n.t("already-in-trash"), true)
+                    }
                     platform::TrashLocation::Outside => {
                         if self.scan.as_ref().is_some_and(|s| s.tree.root() != id) {
                             self.confirm_trash = Some(id);
@@ -554,15 +560,19 @@ impl App {
 
     /// Empties the trash on a worker thread: it can hold many gigabytes.
     fn start_emptying(&mut self, ctx: &egui::Context) {
-        let (Some(id), Some(scan)) = (self.confirm_empty.take(), &self.scan) else { return };
+        let (Some(id), Some(scan)) = (self.confirm_empty.take(), &self.scan) else {
+            return;
+        };
         let size = scan.tree.node(id).size;
         let path = scan.tree.path(id);
         let (tx, rx) = std::sync::mpsc::channel();
         let ctx = ctx.clone();
-        let spawned = std::thread::Builder::new().name("storagemap-empty-trash".into()).spawn(move || {
-            let _ = tx.send(platform::empty_trash(&path));
-            ctx.request_repaint();
-        });
+        let spawned = std::thread::Builder::new()
+            .name("storagemap-empty-trash".into())
+            .spawn(move || {
+                let _ = tx.send(platform::empty_trash(&path));
+                ctx.request_repaint();
+            });
         match spawned {
             Ok(_) => {
                 self.emptying = Some((id, size, rx));
@@ -573,14 +583,18 @@ impl App {
     }
 
     fn poll_emptying(&mut self, ctx: &egui::Context) {
-        let Some((id, size, rx)) = &self.emptying else { return };
+        let Some((id, size, rx)) = &self.emptying else {
+            return;
+        };
         let result = match rx.try_recv() {
             Ok(result) => result,
             Err(std::sync::mpsc::TryRecvError::Empty) => {
                 ctx.request_repaint_after(PROGRESS_REFRESH);
                 return;
             }
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => Err(std::io::Error::other("stopped")),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                Err(std::io::Error::other("stopped"))
+            }
         };
         let (id, size) = (*id, *size);
         self.emptying = None;
@@ -598,7 +612,9 @@ impl App {
                 self.notify(text, false);
             }
             Err(e) => {
-                let text = self.i18n.ta("empty-trash-failed", &[("error", e.to_string().into())]);
+                let text = self
+                    .i18n
+                    .ta("empty-trash-failed", &[("error", e.to_string().into())]);
                 self.notify(text, true);
             }
         }

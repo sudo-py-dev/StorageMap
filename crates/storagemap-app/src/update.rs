@@ -301,7 +301,9 @@ pub enum Installed {
 
 /// Starts a fresh copy of the app (after an update was installed in place).
 pub fn relaunch() -> io::Result<()> {
-    Command::new(installed_exe(std::env::current_exe()?)).spawn().map(drop)
+    Command::new(installed_exe(std::env::current_exe()?))
+        .spawn()
+        .map(drop)
 }
 
 /// Once the package manager replaces the running binary, Linux reports its

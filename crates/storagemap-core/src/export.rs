@@ -208,7 +208,14 @@ mod tests {
         };
         let mut b = TreeBuilder::new(PathBuf::from("/r"), dir);
         let d = b.push(NodeId::ROOT, b"d", dir);
-        b.push(d, b"f", EntryInfo { kind: Kind::File, ..dir });
+        b.push(
+            d,
+            b"f",
+            EntryInfo {
+                kind: Kind::File,
+                ..dir
+            },
+        );
         b.finish()
     }
 
@@ -240,8 +247,17 @@ mod tests {
     fn filters_rows_but_walks_folders() {
         let t = sample();
         let only = |include| {
-            let text = render(&t, &CsvLabels { include, ..CsvLabels::default() });
-            text.lines().skip(1).map(|l| l.split(',').next().unwrap_or("").to_owned()).collect::<Vec<_>>()
+            let text = render(
+                &t,
+                &CsvLabels {
+                    include,
+                    ..CsvLabels::default()
+                },
+            );
+            text.lines()
+                .skip(1)
+                .map(|l| l.split(',').next().unwrap_or("").to_owned())
+                .collect::<Vec<_>>()
         };
         assert_eq!(only(Include::Folders), ["/r", "/r/d"]);
         assert_eq!(only(Include::Files), ["/r/d/f"]);

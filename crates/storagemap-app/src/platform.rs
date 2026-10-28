@@ -22,7 +22,10 @@ pub enum TrashLocation {
 /// Classifies `path`. Moving a trash folder (or its contents) to the trash
 /// is meaningless and fails, so the UI offers "Empty trash" instead.
 pub fn trash_location(path: &Path) -> TrashLocation {
-    let names: Vec<String> = path.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
+    let names: Vec<String> = path
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
     let is_root = |i: usize| {
         let name = &names[i];
         name.eq_ignore_ascii_case("$Recycle.Bin")
@@ -124,19 +127,38 @@ mod tests {
 
     #[test]
     fn recognises_trash_folders() {
-        assert_eq!(trash_location(Path::new("/home/u/.local/share/Trash")), TrashLocation::Root);
-        assert_eq!(trash_location(Path::new("/home/u/.local/share/Trash/files/a.txt")), TrashLocation::Inside);
-        assert_eq!(trash_location(Path::new("/media/usb/.Trash-1000")), TrashLocation::Root);
+        assert_eq!(
+            trash_location(Path::new("/home/u/.local/share/Trash")),
+            TrashLocation::Root
+        );
+        assert_eq!(
+            trash_location(Path::new("/home/u/.local/share/Trash/files/a.txt")),
+            TrashLocation::Inside
+        );
+        assert_eq!(
+            trash_location(Path::new("/media/usb/.Trash-1000")),
+            TrashLocation::Root
+        );
         #[cfg(windows)]
-        assert_eq!(trash_location(Path::new("C:\\$Recycle.Bin")), TrashLocation::Root);
-        assert_eq!(trash_location(Path::new("/home/u/Documents/Trash")), TrashLocation::Outside);
-        assert_eq!(trash_location(Path::new("/home/u/Documents")), TrashLocation::Outside);
+        assert_eq!(
+            trash_location(Path::new("C:\\$Recycle.Bin")),
+            TrashLocation::Root
+        );
+        assert_eq!(
+            trash_location(Path::new("/home/u/Documents/Trash")),
+            TrashLocation::Outside
+        );
+        assert_eq!(
+            trash_location(Path::new("/home/u/Documents")),
+            TrashLocation::Outside
+        );
     }
 
     #[cfg(not(windows))]
     #[test]
     fn empties_trash_folder_in_place() {
-        let root = std::env::temp_dir().join(format!("storagemap-trash-test-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("storagemap-trash-test-{}", std::process::id()));
         std::fs::create_dir_all(root.join("files/dir/sub")).expect("trash test");
         std::fs::create_dir_all(root.join("info")).expect("trash test");
         std::fs::create_dir_all(root.join("expunged/x")).expect("trash test");
@@ -145,8 +167,18 @@ mod tests {
         std::fs::write(root.join("info/a.txt.trashinfo"), "i").expect("trash test");
         std::fs::write(root.join("directorysizes"), "").expect("trash test");
         assert_eq!(empty_trash(&root).expect("trash test"), 5);
-        assert_eq!(std::fs::read_dir(root.join("files")).expect("trash test").count(), 0);
-        assert_eq!(std::fs::read_dir(root.join("info")).expect("trash test").count(), 0);
+        assert_eq!(
+            std::fs::read_dir(root.join("files"))
+                .expect("trash test")
+                .count(),
+            0
+        );
+        assert_eq!(
+            std::fs::read_dir(root.join("info"))
+                .expect("trash test")
+                .count(),
+            0
+        );
         assert_eq!(std::fs::read_dir(&root).expect("trash test").count(), 2);
         std::fs::remove_dir_all(&root).expect("trash test");
     }
