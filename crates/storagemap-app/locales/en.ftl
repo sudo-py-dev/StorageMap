@@ -12,13 +12,27 @@ lang-system = System default
 action-scan-folder = Scan folder…
 action-rescan = Rescan
 action-stop = Stop
-action-export-csv = Export to Excel (CSV)…
+action-export-csv = Export report…
 action-export-short = Export
-action-export-hint = Save this folder's contents as a CSV report that opens in Excel or any spreadsheet
+action-export-hint = Save this folder's contents as a report: Excel, CSV, web page, JSON or text
 csv-bytes = Size (bytes)
 csv-allocated-bytes = On disk (bytes)
 csv-modified-utc = Modified (UTC)
-export-title = Export to Excel (CSV)
+export-title = Export report
+export-format = Format
+export-format-csv = CSV
+export-format-excel = Excel
+export-format-html = Web page
+export-format-json = JSON
+export-format-text = Text
+export-depth = Folder levels
+export-depth-levels =
+    { $count ->
+        [one] 1 level
+       *[other] { $count } levels
+    }
+export-depth-all = All levels
+export-columns = Columns
 export-include = Show only
 export-include-all = Everything
 export-include-folders = Folders

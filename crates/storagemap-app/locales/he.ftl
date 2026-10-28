@@ -12,13 +12,27 @@ lang-system = ברירת המחדל של המערכת
 action-scan-folder = סריקת תיקייה…
 action-rescan = סריקה מחדש
 action-stop = עצירה
-action-export-csv = ייצוא ל־Excel ‏(CSV)…
+action-export-csv = ייצוא דוח…
 action-export-short = ייצוא
-action-export-hint = שמירת תוכן התיקייה כדוח CSV שנפתח ב־Excel או בכל גיליון אלקטרוני
+action-export-hint = שמירת תוכן התיקייה כדוח: Excel, ‏CSV, דף אינטרנט, JSON או טקסט
 csv-bytes = גודל (בתים)
 csv-allocated-bytes = בדיסק (בתים)
 csv-modified-utc = תאריך שינוי (UTC)
-export-title = ייצוא ל־Excel ‏(CSV)
+export-title = ייצוא דוח
+export-format = תבנית
+export-format-csv = CSV
+export-format-excel = Excel
+export-format-html = דף אינטרנט
+export-format-json = JSON
+export-format-text = טקסט
+export-depth = רמות תיקיות
+export-depth-levels =
+    { $count ->
+        [one] רמה אחת
+       *[other] { $count } רמות
+    }
+export-depth-all = כל הרמות
+export-columns = עמודות
 export-include = מה לכלול
 export-include-all = הכול
 export-include-folders = תיקיות בלבד

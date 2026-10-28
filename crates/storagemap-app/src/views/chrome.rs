@@ -8,6 +8,7 @@ use egui::{
     Modal, Modifiers, Panel, RichText, Sense, Stroke, Ui, vec2,
 };
 use storagemap_core::export::Include;
+use storagemap_core::formats::Format;
 use storagemap_core::{Backend, Metric};
 
 use super::{
@@ -1096,6 +1097,66 @@ fn export_options(app: &mut App, ctx: &egui::Context) {
         ui.set_width(440.0);
         ui.with_layout(Layout::top_down(i.dir().start()), |ui| {
             ui.heading(format!("{}  {}", crate::icons::EXPORT, i.t("export-title")));
+            ui.add_space(8.0);
+            ui.label(RichText::new(i.t("export-format")).strong());
+            let layout = i.dir().row().with_main_wrap(true);
+            ui.allocate_ui_with_layout(vec2(ui.available_width(), 0.0), layout, |ui| {
+                for (format, id) in Format::ALL.into_iter().zip([
+                    "export-format-csv",
+                    "export-format-excel",
+                    "export-format-html",
+                    "export-format-json",
+                    "export-format-text",
+                ]) {
+                    ui.selectable_value(&mut settings.export_format, format, i.t(id));
+                }
+            });
+            ui.add_space(8.0);
+            ui.label(RichText::new(i.t("export-depth")).strong());
+            let depth_text = |d: Option<u8>| match d {
+                Some(n) => i.ta("export-depth-levels", &[("count", u64::from(n).into())]),
+                None => i.t("export-depth-all"),
+            };
+            egui::ComboBox::from_id_salt("export-depth")
+                .selected_text(depth_text(settings.export_depth))
+                .show_ui(ui, |ui| {
+                    for d in [Some(1), Some(2), Some(3), Some(5), None] {
+                        ui.selectable_value(&mut settings.export_depth, d, depth_text(d));
+                    }
+                });
+            ui.add_space(8.0);
+            ui.label(RichText::new(i.t("export-columns")).strong());
+            ui.allocate_ui_with_layout(vec2(ui.available_width(), 0.0), layout, |ui| {
+                let all: Vec<usize> = (0..storagemap_core::export::COLUMN_KEYS.len()).collect();
+                if settings.export_columns.is_empty() {
+                    settings.export_columns = all.clone();
+                }
+                for (c, id) in all.into_iter().zip([
+                    "col-path",
+                    "col-type",
+                    "col-size",
+                    "col-allocated",
+                    "col-files",
+                    "col-folders",
+                    "col-percent",
+                    "col-modified",
+                ]) {
+                    let mut on = settings.export_columns.contains(&c);
+                    // The path identifies each row, so it always stays.
+                    let enabled = c != 0;
+                    if ui
+                        .add_enabled(enabled, egui::Checkbox::new(&mut on, i.t(id)))
+                        .changed()
+                    {
+                        if on {
+                            settings.export_columns.push(c);
+                            settings.export_columns.sort_unstable();
+                        } else {
+                            settings.export_columns.retain(|&x| x != c);
+                        }
+                    }
+                }
+            });
             ui.add_space(8.0);
             ui.label(RichText::new(i.t("export-include")).strong());
             row(ui, i.dir(), |ui| {

@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use egui::Ui;
-use storagemap_core::export::{self, Delimited, ReportLabels};
+use storagemap_core::export::{self, Delimited, ReportLabels, ReportWriter};
+use storagemap_core::formats::{self, Format};
 use storagemap_core::snapshot::{self, Comparison, DEFAULT_MIN_FILE_SIZE, Snapshot};
 use storagemap_core::{NodeId, ScanOptions, volumes};
 
@@ -24,8 +25,6 @@ const FIRST_LAUNCH_MAX: egui::Vec2 = egui::vec2(1680.0, 1050.0);
 const VOLUME_REFRESH: Duration = Duration::from_secs(5);
 /// Snapshots kept per scanned folder; older ones are pruned.
 const MAX_SNAPSHOTS_PER_FOLDER: usize = 30;
-/// Folder depth exported to CSV.
-const CSV_EXPORT_DEPTH: usize = 64;
 /// The clipboard gets the focused folder and its direct contents, like the
 /// details table: whole-drive reports are too large to paste.
 const CLIPBOARD_DEPTH: usize = 1;
@@ -489,7 +488,8 @@ impl App {
             Action::CancelExport => self.show_export = false,
             Action::ConfirmExport => {
                 self.show_export = false;
-                self.export_csv(Scope::Folder(CSV_EXPORT_DEPTH));
+                let depth = self.settings.export_depth.map_or(usize::MAX, usize::from);
+                self.export_report(Scope::Folder(depth));
             }
             Action::CopyReport => {
                 self.show_export = false;
@@ -555,7 +555,7 @@ impl App {
             }
             Action::ResetColumns(table) => self.settings.reset_columns(table),
             Action::SetChartStyle(style) => self.settings.chart_style = style,
-            Action::ExportSearch => self.export_csv(Scope::SearchResults),
+            Action::ExportSearch => self.export_report(Scope::SearchResults),
             Action::CopySearch => self.copy_report(Scope::SearchResults, ctx),
             Action::SaveSearch(search) => {
                 let saved = &mut self.settings.saved_searches;
@@ -693,63 +693,111 @@ impl App {
             .map(|id| i.logical(id)),
             kinds: ["type-folder", "type-file", "type-link", "type-other"].map(|id| i.logical(id)),
             include: self.settings.export_include,
+            columns: if self.settings.export_columns.is_empty() {
+                (0..export::COLUMN_KEYS.len()).collect()
+            } else {
+                self.settings.export_columns.clone()
+            },
         }
     }
 
-    /// Writes the focused folder's report as CSV, or as tab-separated text
-    /// when `tsv` is set.
-    fn write_report(
+    /// Writes a report in `format`, or as tab-separated text for the
+    /// clipboard when `format` is `None`.
+    fn write_report<W: std::io::Write + std::io::Seek>(
         &self,
         scope: Scope,
-        out: impl std::io::Write,
-        tsv: bool,
+        out: W,
+        format: Option<Format>,
     ) -> std::io::Result<()> {
         let Some(scan) = &self.scan else {
             return Ok(());
         };
         let (i, unit) = (&self.i18n, self.settings.unit);
         let readable_fmt = |bytes: u64| fmt::size(bytes, unit, 1, |k| i.logical(k));
-        let mut writer = if tsv {
-            Delimited::tsv(out)
-        } else {
-            Delimited::csv(out).with_bom()
-        };
-        if self.settings.export_readable {
-            writer = writer.readable_sizes(&readable_fmt);
-        }
+        let readable = self
+            .settings
+            .export_readable
+            .then_some(&readable_fmt as &dyn Fn(u64) -> String);
         let labels = self.report_labels();
+        let rtl = i.is_rtl();
+        let title = format!("StorageMap · {}", scan.tree.path(scan.focus).display());
+        let lang = self.settings.effective_lang().code();
+        let mut writer: Box<dyn ReportWriter + '_> = match format {
+            None => {
+                let w = Delimited::tsv(out);
+                Box::new(match readable {
+                    Some(r) => w.readable_sizes(r),
+                    None => w,
+                })
+            }
+            Some(Format::Csv) => {
+                let w = Delimited::csv(out).with_bom();
+                Box::new(match readable {
+                    Some(r) => w.readable_sizes(r),
+                    None => w,
+                })
+            }
+            Some(Format::Excel) => {
+                let w = formats::Excel::new(out, rtl);
+                Box::new(match readable {
+                    Some(r) => w.readable_sizes(r),
+                    None => w,
+                })
+            }
+            Some(Format::Html) => {
+                let w = formats::Html::new(out, &title, lang, rtl);
+                Box::new(match readable {
+                    Some(r) => w.readable_sizes(r),
+                    None => w,
+                })
+            }
+            Some(Format::Json) => Box::new(formats::Json::new(out, labels.keys())),
+            Some(Format::Text) => {
+                let w = formats::Text::new(out);
+                Box::new(match readable {
+                    Some(r) => w.readable_sizes(r),
+                    None => w,
+                })
+            }
+        };
         match scope {
             Scope::Folder(depth) => {
-                export::write_tree(&scan.tree, scan.focus, depth, &labels, &mut writer)
+                export::write_tree(&scan.tree, scan.focus, depth, &labels, writer.as_mut())
             }
             Scope::SearchResults => {
                 let entries = scan
                     .search_results()
                     .iter()
                     .map(|h| (h.tree(&scan.tree, &self.parked), h.id));
-                export::write_entries(entries, &labels, &mut writer)
+                export::write_entries(entries, &labels, writer.as_mut())
             }
         }
     }
 
-    fn export_csv(&mut self, scope: Scope) {
+    fn export_report(&mut self, scope: Scope) {
         if self.scan.is_none() {
             return;
         }
+        let format = self.settings.export_format;
+        let ext = format.extension();
         let file_name = match scope {
-            Scope::Folder(_) => "storagemap.csv",
-            Scope::SearchResults => "storagemap-search.csv",
+            Scope::Folder(_) => format!("storagemap.{ext}"),
+            Scope::SearchResults => format!("storagemap-search.{ext}"),
         };
         let Some(target) = rfd::FileDialog::new()
-            .set_title(self.i18n.logical("action-export-csv"))
+            .set_title(self.i18n.logical("export-title"))
             .set_file_name(file_name)
-            .add_filter("CSV", &["csv"])
+            .add_filter(ext.to_uppercase(), &[ext])
             .save_file()
         else {
             return;
         };
         let result =
-            std::fs::File::create(&target).and_then(|f| self.write_report(scope, f, false));
+            std::fs::File::create(&target).and_then(|f| self.write_report(scope, f, Some(format)));
+        if result.is_err() {
+            // Don't leave half a report behind.
+            let _ = std::fs::remove_file(&target);
+        }
         let text = match &result {
             Ok(()) => self
                 .i18n
@@ -759,6 +807,25 @@ impl App {
                 .ta("export-failed", &[("error", e.to_string().into())]),
         };
         self.notify(text, result.is_err());
+    }
+
+    /// Copies the report as tab-separated text, which pastes into
+    /// spreadsheets as a table.
+    fn copy_report(&mut self, scope: Scope, ctx: &egui::Context) {
+        let mut buf = std::io::Cursor::new(Vec::new());
+        let result = self.write_report(scope, &mut buf, None);
+        match result {
+            Ok(()) => {
+                ctx.copy_text(String::from_utf8_lossy(buf.get_ref()).into_owned());
+                self.notify(self.i18n.t("report-copied"), false);
+            }
+            Err(e) => {
+                let text = self
+                    .i18n
+                    .ta("export-failed", &[("error", e.to_string().into())]);
+                self.notify(text, true);
+            }
+        }
     }
 
     /// Asks where (for move, copy and zip) or confirms, then starts.
@@ -921,25 +988,6 @@ impl App {
             Err(e) => i.ta("export-failed", &[("error", e.to_string().into())]),
         };
         self.notify(text, result.is_err());
-    }
-
-    /// Copies the report as tab-separated text, which pastes into
-    /// spreadsheets as a table.
-    fn copy_report(&mut self, scope: Scope, ctx: &egui::Context) {
-        let mut buf = Vec::new();
-        let result = self.write_report(scope, &mut buf, true);
-        match result {
-            Ok(()) => {
-                ctx.copy_text(String::from_utf8_lossy(&buf).into_owned());
-                self.notify(self.i18n.t("report-copied"), false);
-            }
-            Err(e) => {
-                let text = self
-                    .i18n
-                    .ta("export-failed", &[("error", e.to_string().into())]);
-                self.notify(text, true);
-            }
-        }
     }
 
     /// Lists earlier snapshots of the scanned folder and compares with the

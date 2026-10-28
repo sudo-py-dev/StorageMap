@@ -79,8 +79,13 @@ pub struct Settings {
     pub skipped_update: Option<String>,
     /// Rows the CSV report lists.
     pub export_include: Include,
-    /// Write sizes in the CSV report as "1.4 GB" rather than bytes.
+    /// Write sizes in reports as "1.4 GB" rather than bytes.
     pub export_readable: bool,
+    pub export_format: storagemap_core::formats::Format,
+    /// Folder levels a report goes down; `None` for all.
+    pub export_depth: Option<u8>,
+    /// Report columns, as indices into `export::COLUMN_KEYS`; empty for all.
+    pub export_columns: Vec<usize>,
     /// Files and folders every scan leaves out or limits itself to.
     pub scan_filter: ScanFilter,
     /// Columns the user hid, by table id, as column title ids.
@@ -117,6 +122,9 @@ impl Default for Settings {
             skipped_update: None,
             export_include: Include::All,
             export_readable: true,
+            export_format: storagemap_core::formats::Format::Csv,
+            export_depth: None,
+            export_columns: Vec::new(),
             scan_filter: ScanFilter::default(),
             hidden_columns: BTreeMap::new(),
             column_order: BTreeMap::new(),

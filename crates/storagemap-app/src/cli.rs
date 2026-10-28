@@ -5,6 +5,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use storagemap_core::formats::{self, Format};
 use storagemap_core::{Metric, ScanFilter, ScanOptions, ScanProgress, analysis, export};
 
 use crate::fmt;
@@ -22,7 +23,9 @@ USAGE:
 OPTIONS:
     --top N        list the N largest folders and files (default 20)
     --csv FILE     also write a CSV report to FILE
-    --depth N      CSV depth (default 64)
+    --report FILE  also write a report; the extension picks the format:
+                   .csv .xlsx .html .json .txt
+    --depth N      report depth (default 64)
     --allocated    rank by size on disk instead of logical size
     --cross-fs     descend into other mounted filesystems
     --no-mft       Windows: never read the NTFS MFT directly
@@ -63,6 +66,7 @@ impl Args {
                 Some("--top") => out.top = Some(number(&value("--top")?)?),
                 Some("--depth") => out.depth = Some(number(&value("--depth")?)?),
                 Some("--csv") => out.csv = Some(PathBuf::from(value("--csv")?)),
+                Some("--report") => out.csv = Some(PathBuf::from(value("--report")?)),
                 Some("--exclude") => out.filter.exclude.push(text(value("--exclude")?)),
                 Some("--include") => out.filter.include_files.push(text(value("--include")?)),
                 Some(flag) if flag.starts_with('-') && flag.len() > 1 => {
@@ -77,6 +81,18 @@ impl Args {
 
 fn text(s: OsString) -> String {
     s.to_string_lossy().into_owned()
+}
+
+/// The report format for a file name, by extension; CSV when unknown.
+fn report_format(path: &std::path::Path) -> Format {
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    Format::ALL
+        .into_iter()
+        .find(|f| f.extension() == ext)
+        .unwrap_or(Format::Csv)
 }
 
 fn number(s: &OsString) -> Result<usize, String> {
@@ -171,13 +187,23 @@ pub fn run(args: &Args) -> ExitCode {
         return ExitCode::FAILURE;
     }
     if let Some(csv) = &args.csv {
+        let format = report_format(csv);
         let written = std::fs::File::create(csv).and_then(|f| {
+            let labels = export::ReportLabels::default();
+            let title = format!("StorageMap · {}", tree.root_path().display());
+            let mut writer: Box<dyn export::ReportWriter> = match format {
+                Format::Csv => Box::new(export::Delimited::csv(f)),
+                Format::Excel => Box::new(formats::Excel::new(f, false)),
+                Format::Html => Box::new(formats::Html::new(f, &title, "en", false)),
+                Format::Json => Box::new(formats::Json::new(f, labels.keys())),
+                Format::Text => Box::new(formats::Text::new(f)),
+            };
             export::write_tree(
                 tree,
                 tree.root(),
                 args.depth.unwrap_or(DEFAULT_CSV_DEPTH),
-                &export::ReportLabels::default(),
-                &mut export::Delimited::csv(f),
+                &labels,
+                writer.as_mut(),
             )
         });
         if let Err(e) = written {

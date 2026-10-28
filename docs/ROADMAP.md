@@ -66,10 +66,13 @@ shared foundations the later items build on.
 ## Phase 4 — Reports
 
 - Formats: Excel workbook, HTML report, PDF report, plain text, JSON,
-  clipboard.
+  clipboard. *(Done except PDF: Excel, web page, JSON and text join CSV
+  and the clipboard. The web page prints to PDF from any browser; a native
+  PDF needs embedded fonts and text shaping for Hebrew and Arabic.)*
 - Options per report: depth, columns and their order, which rows, and the
-  units used for sizes.
-- Full file list export for use in a database.
+  units used for sizes. *(Done, columns in their standard order.)*
+- Full file list export for use in a database. *(Done: files only, all
+  levels, as CSV or JSON; also `--report FILE` on the command line.)*
 
 ## Phase 5 — Growth over time
 

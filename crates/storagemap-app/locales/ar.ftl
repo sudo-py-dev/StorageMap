@@ -12,13 +12,29 @@ lang-system = لغة النظام
 action-scan-folder = فحص مجلد…
 action-rescan = إعادة الفحص
 action-stop = إيقاف
-action-export-csv = تصدير إلى Excel ‏(CSV)…
+action-export-csv = تصدير تقرير…
 action-export-short = تصدير
-action-export-hint = حفظ محتويات هذا المجلد كتقرير CSV يُفتح في Excel أو أي جدول بيانات
+action-export-hint = حفظ محتويات هذا المجلد كتقرير: Excel أو CSV أو صفحة ويب أو JSON أو نص
 csv-bytes = الحجم (بايت)
 csv-allocated-bytes = على القرص (بايت)
 csv-modified-utc = تاريخ التعديل (UTC)
-export-title = تصدير إلى Excel ‏(CSV)
+export-title = تصدير تقرير
+export-format = التنسيق
+export-format-csv = CSV
+export-format-excel = Excel
+export-format-html = صفحة ويب
+export-format-json = JSON
+export-format-text = نص
+export-depth = مستويات المجلدات
+export-depth-levels =
+    { $count ->
+        [one] مستوى واحد
+        [two] مستويان
+        [few] { $count } مستويات
+       *[other] { $count } مستوى
+    }
+export-depth-all = كل المستويات
+export-columns = الأعمدة
 export-include = عرض
 export-include-all = الكل
 export-include-folders = المجلدات فقط
