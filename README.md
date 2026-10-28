@@ -1,149 +1,145 @@
-# StorageMap
+<p align="center">
+  <img src="assets/icon/storagemap-128.png" width="96" alt="StorageMap icon">
+</p>
 
-A fast disk space analyzer for **Windows and Linux**, written in Rust with egui.
-It is multilingual from the start (English, Hebrew, Arabic) with full
-right-to-left support.
+<h1 align="center">StorageMap</h1>
+
+<p align="center">
+  <b>See where your disk space went, and get it back.</b><br>
+  A fast, free disk space analyzer for Windows and Linux.
+</p>
+
+<p align="center">
+  <a href="https://github.com/sudo-py-dev/StorageMap/releases/latest"><b>Download</b></a> ·
+  <a href="#features">Features</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#faq">FAQ</a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/treemap.png" alt="StorageMap showing a folder as a treemap" width="900">
+</p>
+
+StorageMap scans a drive or folder in seconds and shows what takes up the
+space: as a treemap where every rectangle is a file, as a sortable folder
+tree, and as lists of the largest files and file types. It then helps you
+free space safely, by pointing out caches, build leftovers, old downloads
+and duplicate files, and it remembers each scan so you can see what grew
+since last time.
 
 ## Features
 
-- **Fast scanning on each OS**
-  - Linux: `openat` + `getdents64` + `statx` on a parallel work-stealing
-    pool, opening each folder relative to its parent's descriptor.
-    - Hard links are counted once; the walk stays on one filesystem by
-      default.
-    - The open-files limit is raised automatically.
-  - Windows: reads the NTFS Master File Table directly when running as
-    administrator.
-    - Without admin rights it falls back to batched
-      `GetFileInformationByHandleEx` directory listings (about 64 KiB of
-      entries per call).
-- **Views:** folder tree, a nested squarified treemap with cushion shading and
-  category colours, details table, largest files, file types, age
-  distribution, and name search.
-- **Measures:** size, size on disk, or file count; all views follow the
-  choice.
-- **Actions:** open, show in file manager, copy path, move to trash (with
-  confirmation), rescan a subfolder, export CSV, drag a folder onto the
-  window to scan it.
-- **OS integration:** an "Open with StorageMap" entry for folders.
-  - Windows: Explorer context menu, written to HKCU; no admin needed.
-  - Linux: a `.desktop` entry for file managers.
-  - Windows also offers a one-click restart as administrator.
-- **Internationalisation:** Project Fluent messages with CLDR plural rules
-  (Hebrew dual, the six Arabic plural forms) and localised size units.
-  - Direction follows the language: panels, tables, the treemap and arrow
-    keys all mirror in RTL.
-  - Files with Hebrew or Arabic names display correctly in any UI language.
-- **Snapshots and changes over time:** every scan is saved as a compact
-  snapshot (all folders plus files ≥ 1 MiB), and the next scan of the same
-  folder is compared with it automatically.
-  - The *Changes* tab lists what grew, shrank, appeared or disappeared,
-    biggest change first.
-  - You can compare with any earlier snapshot or an exported `.smap` file.
-  - The last 30 snapshots per folder are kept.
-- **Duplicate finder:** files are grouped by size, then by a BLAKE3
-  fingerprint of their first and last 16 KiB, and only then by a full
-  BLAKE3 hash.
-  - It runs in the background with progress and can be stopped.
-  - Hard links are ignored, since they already share space.
-  - Results show reclaimable space, and every copy offers open, show and
-    trash.
-- **Cleanup suggestions:** finds space that is usually safe to reclaim —
-  trash, application caches, build output (`node_modules`, Rust `target`
-  next to a `Cargo.toml`), package-manager caches, temp folders, huge logs,
-  crash dumps and large downloads untouched for six months. Every item is
-  reviewed and moved to the trash, never deleted outright.
-- **Installers and auto-update:** an Inno Setup installer for Windows (per
-  user, no admin needed) and a `.deb` for Debian/Ubuntu. The app checks
-  GitHub Releases once a day (can be turned off), shows the release notes,
-  verifies the download against `SHA256SUMS`, then installs and relaunches.
-- **Polished UI:** light and dark themes, adjustable interface size,
-  animated tabs, treemap zoom and toasts, a settings window with keyboard
-  shortcuts, and the window sized to the screen on first launch.
-- **CLI:** `storagemap --cli PATH [--top N] [--csv FILE] [--allocated]` for
-  scripts and benchmarks.
+- **Fast scans.** On Linux it reads many folders in parallel. On Windows,
+  run as administrator, it reads the NTFS file table directly, which is
+  usually many times faster than listing folders one by one.
+- **Treemap.** Every file is a rectangle sized by how much space it takes,
+  coloured by type: video, images, audio, archives, documents, code and
+  more. Double-click a folder to zoom in.
+- **Folder tree and details.** Folders sorted by size with share bars, plus
+  a sortable table with size, size on disk, file counts and dates.
+- **Cleanup suggestions.** Finds space that is usually safe to free: the
+  trash, application caches, build output such as `node_modules`,
+  package-manager caches, temporary files, huge logs, crash dumps and large
+  downloads you haven't touched in six months.
+- **What changed.** Each scan is saved as a snapshot, so scanning the same
+  folder again shows exactly what grew, shrank, appeared or disappeared.
+- **Duplicate finder.** Finds files with identical content and shows how
+  much space removing the extra copies would free.
+- **Largest files, file types and age.** See which files are biggest, which
+  kinds of files use the most space, and how much of it is years old.
+- **Safe by design.** Nothing is ever deleted outright. Files go to the
+  Recycle Bin or Trash after you confirm, so you can always restore them.
+- **Your language.** English, Hebrew and Arabic, with a fully mirrored
+  right-to-left layout.
+- **Light and dark themes**, adjustable interface size, keyboard shortcuts,
+  and drag-and-drop: drop a folder on the window to scan it.
+- **Automatic updates.** StorageMap checks for new versions once a day, and
+  you can turn that off.
 
-## Build and run
+## Screenshots
 
-```bash
-cargo build --release
-```
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/cleanup.png" alt="Cleanup suggestions"><br><b>Cleanup</b>: caches, build output and old downloads, grouped and explained.</td>
+    <td width="50%"><img src="docs/screenshots/changes.png" alt="Changes since the last scan"><br><b>Changes</b>: what grew or shrank since the last scan.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/duplicates.png" alt="Duplicate files"><br><b>Duplicates</b>: identical files and the space they waste.</td>
+    <td><img src="docs/screenshots/rtl-hebrew.png" alt="StorageMap in Hebrew"><br><b>Right-to-left</b>: the whole interface in Hebrew.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/start.png" alt="Start screen with drives"><br><b>Start screen</b>: your drives and how full they are.</td>
+    <td><img src="docs/screenshots/settings.png" alt="Settings window"><br><b>Settings</b>: language, theme, interface size and more.</td>
+  </tr>
+</table>
 
-```bash
-./target/release/storagemap            # open the app
-./target/release/storagemap /home      # open and scan /home
-./target/release/storagemap --cli /usr --top 10
-```
+## Install
 
-On Linux, egui needs the usual windowing libraries (X11/Wayland and
-xkbcommon), which desktop distributions already ship. To build for Windows,
-build on Windows (MSVC), or cross-compile with `cargo build --release --target
-x86_64-pc-windows-gnu` with MinGW installed.
+Download the latest version from the
+[Releases page](https://github.com/sudo-py-dev/StorageMap/releases/latest).
 
-## Releasing
+| System | File | How |
+|---|---|---|
+| **Windows 10/11** | `StorageMap-…-windows-x64-setup.exe` | Run it. No administrator rights are needed. |
+| Windows, portable | `StorageMap-…-windows-x64-portable.zip` | Unzip and run `storagemap.exe`. |
+| **Ubuntu, Debian, Mint** | `storagemap_…_amd64.deb` | Open it with your software installer, or run `sudo apt install ./storagemap_*_amd64.deb` |
+| Other Linux | `StorageMap-…-linux-x86_64.tar.gz` | Extract and run `storagemap`. |
 
-1. Bump `version` in the workspace `Cargo.toml` and commit.
-2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+The Windows installer can add **"Open with StorageMap"** to the right-click
+menu of folders and drives. On Linux, StorageMap appears in your
+applications menu and in "Open With" for folders.
 
-The *Release* workflow then:
-- creates a **draft** release;
-- builds the Windows installer and portable zip and the Linux `.deb` and
-  tarball, with build-provenance attestations when the repository is public;
-- uploads `SHA256SUMS`;
-- publishes the release only once every asset is in place, so the updater
-  never sees a half-finished release.
+## How to use it
 
-The updater reads GitHub's public API, so it only finds releases once the
-repository (or at least its releases) is public.
+1. **Pick something to scan.** Click a drive on the start screen, choose
+   *Scan folder…*, or drop a folder onto the window.
+2. **Find the big stuff.** The treemap shows it at a glance. Click a folder
+   in the tree on the side to look inside, or double-click a rectangle to
+   zoom in.
+3. **Free space.** Open the *Cleanup* tab for suggestions, or right-click
+   any file or folder and choose *Move to trash*.
+4. **Come back later.** Scan the same folder again and open *Changes* to see
+   what grew.
 
-## Layout
+Right-clicking any item also lets you open it, show it in your file manager
+or copy its path. All shortcuts are listed in *Settings → Keyboard
+shortcuts*.
 
-```
-crates/storagemap-core   scanner, tree model, analyses, treemap layout, NTFS parser
-  backend/linux.rs       statx walker
-  backend/windows/       MFT reader + directory-info walker
-  ntfs.rs                platform-independent MFT record parser (unit-tested)
-crates/storagemap-app    egui application and CLI
-  i18n/                  Fluent bundles + bidi layer
-  locales/*.ftl          translations
-  views/                 tree panel, treemap, tables, start screen, chrome
-```
+## Privacy
 
-## How RTL works with egui
+Everything runs on your computer. Your scans, snapshots and duplicate
+searches never leave it. The only network request StorageMap makes is the
+daily update check, which asks GitHub whether a newer version exists. You
+can turn it off in *Settings → Updates*.
 
-egui 0.37 shapes each font run with harfrust, so a single Hebrew or Arabic
-word renders correctly and Arabic letters join. It does not order runs
-within a sentence. StorageMap therefore:
+## FAQ
 
-1. runs the Unicode Bidirectional Algorithm over each line to get the run
-   order;
-2. puts the characters inside each RTL run back in logical order, so the
-   shaper's own reversal and Arabic joining come out right;
-3. elides and wraps text in logical order *before* reordering, so RTL text
-   loses its end, not its beginning.
+**Is it safe to delete what the Cleanup tab suggests?**
+Usually, yes. Caches and build output are recreated when needed. Still,
+review each item. Everything goes to the Recycle Bin or Trash, so you can
+restore it.
 
-Layouts mirror through direction-aware helpers (`widgets.rs`) instead of
-hard-coded left and right.
+**Why does Windows offer "Restart as administrator"?**
+As administrator, StorageMap can read the NTFS file table directly, which
+makes scanning a whole drive much faster. Without it, StorageMap still works,
+just more slowly.
 
-## Adding a language
+**Why don't the folder sizes match Explorer exactly?**
+StorageMap can show the *logical size* (what the files contain) or the *size
+on disk* (what they occupy, including compression and block rounding).
+Switch between them with *Measure by* in the toolbar. Hard links are counted
+only once.
 
-1. Copy `crates/storagemap-app/locales/en.ftl` to `<code>.ftl` and translate
-   it.
-2. Add the language to `Lang` in `i18n/mod.rs`: code, native name, direction
-   and source file.
-3. Run `cargo test`. It fails if any message is missing or extra.
+**How do I uninstall it?**
+On Windows, use *Settings → Apps*. On Debian or Ubuntu, run
+`sudo apt remove storagemap`.
 
-## Development
+## Building from source
 
-```bash
-cargo test && cargo clippy --all-targets
-```
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for building, the project
+layout, how scanning and right-to-left text work, and how to add a language.
 
-To check the visuals automatically, run:
+## License
 
-```bash
-STORAGEMAP_SCREENSHOT=/tmp/shot.rgba STORAGEMAP_SCREENSHOT_TAB=details ./target/release/storagemap /usr
-```
-
-This scans the folder, writes the window as raw RGBA (prefixed by a
-`W H` line) and exits.
+StorageMap is available under either the [MIT](LICENSE-MIT) or the
+[Apache 2.0](LICENSE-APACHE) license, at your option.

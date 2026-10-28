@@ -23,8 +23,9 @@ const MIN_SIDE: f32 = 3.0;
 const PAD: f32 = 2.0;
 const HEADER: f32 = 16.0;
 const LEGEND_LINE: f32 = 24.0;
-/// Rough width of one legend entry, to predict how many lines it wraps to.
-const LEGEND_ENTRY_WIDTH: f32 = 160.0;
+const LEGEND_SWATCH: f32 = 12.0;
+/// Extra space after each legend entry.
+const LEGEND_ENTRY_GAP: f32 = 6.0;
 /// Seconds for the zoom transition when the focused folder changes.
 const ZOOM_TIME: f32 = 0.32;
 /// Relative inset the layout grows from when not zooming into a tile.
@@ -123,9 +124,15 @@ fn layout(p: &Params<'_>, id: NodeId, area: Rect, depth: u8, tiles: &mut Vec<Til
 }
 
 /// Space for a folder's children: below a header when there is room.
+/// Whether a folder tile is big enough for a header line above its children.
+/// Shared by layout and painting so a header never overlaps a child label.
+fn has_header(r: Rect) -> bool {
+    r.width() >= 48.0 && r.height() >= HEADER + 2.0 * PAD + MIN_SIDE + 10.0
+}
+
 fn inner_rect(r: Rect) -> Option<Rect> {
     let min = 2.0 * PAD + MIN_SIDE;
-    if r.width() >= 48.0 && r.height() >= HEADER + min + 10.0 {
+    if has_header(r) {
         Some(Rect::from_min_max(
             r.min + vec2(PAD, HEADER),
             r.max - vec2(PAD, PAD),
@@ -148,19 +155,34 @@ fn mirror(tiles: &mut [Tile], area: Rect) {
 }
 
 pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
-    // Reserve room for the legend: as many lines as last frame's categories need.
-    let categories = scan
+    // Reserve room for the legend: lay out last frame's entries the way the
+    // wrapping legend will, and count the lines.
+    let categories: BTreeSet<Category> = scan
         .treemap
         .tiles
         .iter()
         .filter_map(|t| t.category)
-        .collect::<BTreeSet<_>>()
-        .len()
-        .max(1);
-    let lines = ((categories as f32 * LEGEND_ENTRY_WIDTH) / ui.available_width().max(1.0))
-        .ceil()
-        .max(1.0);
-    let legend_height = lines * LEGEND_LINE + 4.0;
+        .collect();
+    let small = egui::TextStyle::Small.resolve(ui.style());
+    let gap = ui.spacing().item_spacing.x;
+    let width = ui.available_width().max(1.0);
+    let (mut lines, mut used) = (1.0f32, 0.0f32);
+    for cat in &categories {
+        let label = ui
+            .painter()
+            .layout_no_wrap(env.t(cat.label_id()), small.clone(), Color32::PLACEHOLDER)
+            .size()
+            .x;
+        // Must match the block `legend` allocates per entry, plus item spacing.
+        let entry = LEGEND_SWATCH + 6.0 + label + LEGEND_ENTRY_GAP + gap;
+        if used > 0.0 && used + entry > width {
+            lines += 1.0;
+            used = 0.0;
+        }
+        used += entry;
+    }
+    let row_gap = ui.spacing().item_spacing.y;
+    let legend_height = lines * (LEGEND_LINE - 4.0 + row_gap) + row_gap + 4.0;
     let size = ui.available_size() - vec2(0.0, legend_height);
     let (rect, response) = ui.allocate_exact_size(size.max(vec2(10.0, 10.0)), Sense::click());
     let key = Key {
@@ -327,7 +349,7 @@ fn paint_tiles(
     let small = FontId::proportional(11.5);
     for t in tiles {
         let (w, h) = (t.rect.width(), t.rect.height());
-        if t.is_dir() && w >= 48.0 && h >= HEADER + 12.0 {
+        if t.is_dir() && has_header(t.rect) {
             let header = Rect::from_min_size(t.rect.min, vec2(w, HEADER)).shrink2(vec2(4.0, 0.0));
             let label = format!("{} · {}", tree.name(t.id), env.metric_text(tree.node(t.id)));
             paint_text(
@@ -409,18 +431,38 @@ fn legend(ui: &mut Ui, env: &Env<'_>, tiles: &[Tile]) {
         .filter_map(|c| Category::ALL.iter().position(|&x| x == c))
         .collect();
     let layout = match env.i18n.dir() {
-        crate::i18n::Direction::Ltr => Layout::left_to_right(Align::Center),
-        crate::i18n::Direction::Rtl => Layout::right_to_left(Align::Center),
+        crate::i18n::Direction::Ltr => Layout::left_to_right(Align::Min),
+        crate::i18n::Direction::Rtl => Layout::right_to_left(Align::Min),
     };
     ui.allocate_ui_with_layout(
         vec2(ui.available_width(), ui.available_height()),
         layout.with_main_wrap(true),
         |ui| {
+            let font = egui::TextStyle::Small.resolve(ui.style());
+            let ink = ui.visuals().text_color();
+            let dir = env.i18n.dir();
             for cat in present.into_iter().map(|i| Category::ALL[i]) {
-                let (swatch, _) = ui.allocate_exact_size(vec2(12.0, 12.0), Sense::hover());
+                // Swatch and label are one block, so they wrap together.
+                let galley = ui
+                    .painter()
+                    .layout_no_wrap(env.t(cat.label_id()), font.clone(), ink);
+                let size = vec2(
+                    LEGEND_SWATCH + 6.0 + galley.size().x + LEGEND_ENTRY_GAP,
+                    LEGEND_LINE - 4.0,
+                );
+                let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+                let swatch = dir.span(
+                    rect.shrink2(vec2(0.0, (rect.height() - LEGEND_SWATCH) / 2.0)),
+                    0.0,
+                    LEGEND_SWATCH,
+                );
                 ui.painter().rect_filled(swatch, 2.0, cat.color());
-                ui.small(env.t(cat.label_id()));
-                ui.add_space(6.0);
+                let text = dir.span(rect, LEGEND_SWATCH + 6.0, galley.size().x);
+                ui.painter().galley(
+                    egui::pos2(text.left(), rect.center().y - galley.size().y / 2.0),
+                    galley,
+                    ink,
+                );
             }
         },
     );
