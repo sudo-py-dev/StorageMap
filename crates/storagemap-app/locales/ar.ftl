@@ -100,6 +100,7 @@ backend-linux = محرك statx
 backend-mft = قراءة مباشرة لجدول NTFS MFT
 backend-dirinfo = محرك مجلدات Windows
 backend-portable = المحرك القياسي
+backend-source = محرك { $name }
 admin-hint = شغّل البرنامج كمسؤول لقراءة جدول الملفات الرئيسي في NTFS مباشرة – عادةً أسرع بعدة مرات.
 
 ## Trash

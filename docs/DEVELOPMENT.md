@@ -37,6 +37,9 @@ crates/storagemap-core   scanner, tree model, analyses, snapshots, duplicates, c
   snapshot.rs            snapshot file format and comparison
   duplicates.rs          size → partial hash → full BLAKE3 duplicate finder
   cleanup.rs             cleanup suggestion heuristics
+  filter.rs              exclude/include glob patterns applied by every backend
+  export.rs              report rows and format writers (CSV, tab-separated)
+  source.rs              Source trait: scan anything that can list directories
 crates/storagemap-app    egui application and CLI
   i18n/                  Fluent bundles and the bidi layer
   locales/*.ftl          translations

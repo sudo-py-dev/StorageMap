@@ -492,7 +492,7 @@ pub fn status_bar(app: &mut App, ui: &mut Ui) {
                 RichText::new(format!(
                     "{} {}",
                     crate::icons::LIGHTNING,
-                    i.t(backend_label_id(scan.backend))
+                    backend_label(i, scan.backend)
                 ))
                 .small(),
             );
@@ -542,13 +542,15 @@ pub fn status_bar(app: &mut App, ui: &mut Ui) {
     });
 }
 
-fn backend_label_id(backend: Backend) -> &'static str {
-    match backend {
+fn backend_label(i: &crate::i18n::I18n, backend: Backend) -> String {
+    let id = match backend {
         Backend::LinuxStatx => "backend-linux",
         Backend::NtfsMft => "backend-mft",
         Backend::WindowsDirInfo => "backend-dirinfo",
         Backend::Portable => "backend-portable",
-    }
+        Backend::Source(name) => return i.ta("backend-source", &[("name", name.into())]),
+    };
+    i.t(id)
 }
 
 /// The volume with the longest mount point containing `path`.

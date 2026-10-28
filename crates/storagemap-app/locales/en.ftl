@@ -98,6 +98,7 @@ backend-linux = statx engine
 backend-mft = NTFS MFT direct read
 backend-dirinfo = Windows directory engine
 backend-portable = standard engine
+backend-source = { $name } engine
 admin-hint = Run as administrator to read the NTFS master file table directly – usually many times faster.
 
 ## Trash

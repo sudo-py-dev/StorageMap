@@ -4,21 +4,23 @@ Where StorageMap is heading after 0.1. Work lands one phase at a time; each
 item ships on its own once it is usable. Items marked **groundwork** are the
 shared foundations the later items build on.
 
-## Phase 0 — Groundwork
+## Phase 0 — Groundwork (done)
 
 - **Scan filters** (groundwork). Exclude folders or files by name or path
   pattern, and optionally count only files that match include patterns.
-  Applied by every backend, including the NTFS table reader.
+  Applied by every backend, including the NTFS table reader. Set in
+  Settings → Scanning, or with `--exclude` and `--include`.
 - **Configurable columns** (groundwork). Every table column has a stable id;
-  which columns are shown is a per-table preference, chosen from the header's
-  context menu.
+  which columns are shown is a per-table preference, chosen by
+  right-clicking a column header.
 - **Report formats** (groundwork). Exports build one report model (rows of
   typed values) and hand it to a format writer. CSV and tab-separated text
-  (for the clipboard) first; other formats only add a writer.
+  (copied from the export dialog) first; other formats only add a
+  `ReportWriter`.
 - **Scan sources** (groundwork). A scan reads from a source: the local
   filesystem today, and anything that can list a directory later (SSH, S3,
   WebDAV, Azure Blob, SharePoint, disk images, phones), reusing the parallel
-  walker and tree.
+  walker, filters and tree: a new place implements `storagemap_core::source::Source`.
 
 ## Phase 1 — Everyday analysis
 

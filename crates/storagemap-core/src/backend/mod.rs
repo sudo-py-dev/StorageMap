@@ -24,6 +24,8 @@ pub enum Backend {
     WindowsDirInfo,
     /// Plain `std::fs` traversal.
     Portable,
+    /// A [`crate::source::Source`], by its name.
+    Source(&'static str),
 }
 
 pub(crate) fn scan(

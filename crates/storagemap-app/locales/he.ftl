@@ -98,6 +98,7 @@ backend-linux = מנוע statx
 backend-mft = קריאה ישירה של NTFS MFT
 backend-dirinfo = מנוע התיקיות של Windows
 backend-portable = מנוע רגיל
+backend-source = מנוע { $name }
 admin-hint = הפעילו כמנהל מערכת כדי לקרוא ישירות את טבלת הקבצים הראשית של NTFS – בדרך כלל מהיר פי כמה.
 
 ## Trash

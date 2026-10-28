@@ -11,6 +11,7 @@ mod filter;
 pub mod ntfs;
 mod progress;
 pub mod snapshot;
+pub mod source;
 mod tree;
 pub mod treemap;
 pub mod volumes;
@@ -90,15 +91,24 @@ pub fn scan(
     opts: &ScanOptions,
     progress: &ScanProgress,
 ) -> Result<ScanResult, ScanError> {
-    let start = Instant::now();
     let root = std::path::absolute(root).map_err(|e| ScanError::io(root, e))?;
+    run_scan(opts, progress, || backend::scan(&root, opts, progress))
+}
+
+/// Runs `scan` on a dedicated thread pool and wraps up its result.
+pub(crate) fn run_scan(
+    opts: &ScanOptions,
+    progress: &ScanProgress,
+    scan: impl FnOnce() -> Result<(Tree, Backend), ScanError> + Send,
+) -> Result<ScanResult, ScanError> {
+    let start = Instant::now();
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(thread_count(opts.threads))
         .stack_size(SCAN_THREAD_STACK)
         .thread_name(|i| format!("storagemap-scan-{i}"))
         .build()
         .map_err(|e| ScanError::ThreadPool(e.to_string()))?;
-    let (tree, backend) = pool.install(|| backend::scan(&root, opts, progress))?;
+    let (tree, backend) = pool.install(scan)?;
     let snap = progress.snapshot();
     tracing::info!(?backend, entries = tree.len(), elapsed = ?start.elapsed(), "scan finished");
     Ok(ScanResult {
