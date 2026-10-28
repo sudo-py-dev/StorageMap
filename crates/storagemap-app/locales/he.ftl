@@ -70,6 +70,62 @@ tab-search = חיפוש
 
 ## Columns
 columns-menu = עמודות
+col-mark = ✔
+mark-hint = סימון להעברה, העתקה, דחיסה, שינוי שם או לאשפה (גם Ctrl ולחיצה על שורה מסמנים אותה)
+marked-summary = { $count } מסומנים · { $size }
+marks-clear = ניקוי הסימונים
+search-mark-all = סימון הכול
+search-mark-all-hint = סימון כל התוצאות בסריקה הזו, כדי לפעול עליהן יחד
+bulk-move = העברה אל…
+bulk-copy = העתקה אל…
+bulk-zip = דחיסה…
+bulk-rename = שינוי שם…
+bulk-trash = העברה לאשפה
+bulk-move-title = העברת הפריטים המסומנים אל
+bulk-copy-title = העתקת הפריטים המסומנים אל
+bulk-zip-title = שמירת הארכיון בשם
+bulk-trash-title = להעביר את הפריטים המסומנים לאשפה?
+bulk-trash-body = { $count } פריטים ({ $size }) יועברו לאשפה. אפשר לשחזר אותם משם.
+bulk-moving = מעביר… { $done } מתוך { $total }
+bulk-copying = מעתיק… { $done } מתוך { $total }
+bulk-zipping = דוחס… { $done } מתוך { $total }
+bulk-trashing = מעביר לאשפה… { $done } מתוך { $total }
+bulk-renaming = משנה שמות… { $done } מתוך { $total }
+bulk-moved =
+    { $count ->
+        [one] פריט אחד הועבר
+       *[other] { $n } פריטים הועברו
+    }
+bulk-copied =
+    { $count ->
+        [one] פריט אחד הועתק
+       *[other] { $n } פריטים הועתקו
+    }
+bulk-zipped =
+    { $count ->
+        [one] פריט אחד נדחס
+       *[other] { $n } פריטים נדחסו
+    }
+bulk-trashed =
+    { $count ->
+        [one] פריט אחד הועבר לאשפה
+       *[other] { $n } פריטים הועברו לאשפה
+    }
+bulk-renamed =
+    { $count ->
+        [one] שם של פריט אחד שונה
+       *[other] שמות של { $n } פריטים שונו
+    }
+rename-title = שינוי שם לפריטים המסומנים
+rename-find = חיפוש
+rename-replace = החלפה ב־
+rename-match-case = התאמת אותיות רישיות
+rename-preview = { $count } ישונו:
+rename-apply = שינוי שם
+rename-unchanged = ללא שינוי
+rename-invalid = שם לא תקין
+rename-exists = השם הזה תפוס
+rename-duplicate = פריט אחר יקבל את אותו שם
 column-earlier = הזזה קדימה
 column-later = הזזה אחורה
 columns-reset = איפוס עמודות

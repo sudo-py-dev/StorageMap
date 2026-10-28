@@ -1,5 +1,7 @@
 //! Largest files, file types and age distribution.
 
+use std::collections::HashSet;
+
 use egui::{Response, Ui, vec2};
 use storagemap_core::analysis::{self, AgeBucket, AgeStat, ExtensionStat, OwnerStat};
 use storagemap_core::{Metric, NodeId, Tree, ratio};
@@ -17,9 +19,11 @@ struct EntryList<'a> {
     tree: &'a Tree,
     ids: &'a [NodeId],
     selected: Option<NodeId>,
+    marked: &'a HashSet<NodeId>,
 }
 
-pub(super) const ENTRY_COLUMNS: [Col; 4] = [
+pub(super) const ENTRY_COLUMNS: [Col; 5] = [
+    table::MARK,
     Col::fixed("col-name", 240.0, 1),
     Col::fixed("col-size", 92.0, 2),
     Col::flex("col-path"),
@@ -38,9 +42,10 @@ impl TableSource for EntryList<'_> {
     fn cell(&mut self, ui: &mut Ui, env: &mut Env<'_>, row: usize, col: usize) {
         let id = self.ids[row];
         match col {
-            0 => table::text(ui, env, &self.tree.name(id), false),
-            1 => table::text(ui, env, &env.metric_text(self.tree.node(id)), true),
-            3 => table::text(ui, env, &fmt::date(self.tree.node(id).modified), true),
+            0 => table::mark_cell(ui, env, id, self.marked.contains(&id)),
+            1 => table::text(ui, env, &self.tree.name(id), false),
+            2 => table::text(ui, env, &env.metric_text(self.tree.node(id)), true),
+            4 => table::text(ui, env, &fmt::date(self.tree.node(id).modified), true),
             _ => {
                 let parent = self
                     .tree
@@ -54,7 +59,8 @@ impl TableSource for EntryList<'_> {
 
     fn row_response(&mut self, env: &mut Env<'_>, row: usize, response: &Response) {
         let id = self.ids[row];
-        if response.double_clicked() {
+        if table::mark_click(env, response, id) {
+        } else if response.double_clicked() {
             env.push(Action::Focus(id));
         } else if response.clicked() {
             env.push(Action::Select(id));
@@ -81,6 +87,7 @@ pub fn top_files(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
             tree,
             ids,
             selected: scan.selected,
+            marked: &scan.marked,
         },
     );
 }

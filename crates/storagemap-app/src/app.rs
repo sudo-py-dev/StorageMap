@@ -30,6 +30,16 @@ const CSV_EXPORT_DEPTH: usize = 64;
 /// details table: whole-drive reports are too large to paste.
 const CLIPBOARD_DEPTH: usize = 1;
 
+/// A bulk action the user asked for; destinations are picked first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BulkRequest {
+    MoveTo,
+    CopyTo,
+    Zip,
+    Rename,
+    Trash,
+}
+
 /// What a report covers.
 #[derive(Debug, Clone, Copy)]
 enum Scope {
@@ -43,6 +53,10 @@ enum Scope {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     StartScan(PathBuf),
+    /// Marks or unmarks an entry for bulk actions.
+    ToggleMark(NodeId),
+    MarkAll(Vec<NodeId>),
+    ClearMarks,
     /// Shows the tab that scanned `root` and reveals `path` in it.
     RevealInTab {
         root: PathBuf,
@@ -85,6 +99,10 @@ pub enum Action {
     ExportDuplicates,
     /// Shows a message; the text is already in visual order.
     Notify(String, bool),
+    /// A bulk action on the marked entries, from the selection bar.
+    Bulk(BulkRequest),
+    RunBulkTrash,
+    RunBulkRename(Vec<storagemap_core::operations::PlannedRename>),
     /// Show or hide a column of a table: (table id, column title id).
     ToggleColumn(&'static str, &'static str),
     /// A table's full column order, as title ids.
@@ -168,6 +186,10 @@ pub struct App {
     pub update_dismissed: bool,
     pub show_release_notes: bool,
     pub logo: egui::TextureHandle,
+    /// A bulk action running on the marked entries, and the scan it acts on.
+    pub bulk: Option<(crate::bulk::Job, PathBuf)>,
+    pub confirm_bulk_trash: bool,
+    pub rename: Option<views::selection::RenameDialog>,
 }
 
 impl App {
@@ -205,6 +227,9 @@ impl App {
             update_dismissed: false,
             show_release_notes: false,
             logo: load_logo(&cc.egui_ctx),
+            bulk: None,
+            confirm_bulk_trash: false,
+            rename: None,
         };
         app.maybe_check_updates(&cc.egui_ctx);
         let page = app.devshot.as_ref().and_then(|d| d.settings.as_deref());
@@ -399,6 +424,13 @@ impl App {
                 self.volumes = volumes::list();
             }
             Action::SwitchTab(index) => self.tabs().switch(index),
+            Action::ToggleMark(id) => self.with_scan(|s| {
+                if !s.marked.remove(&id) {
+                    s.marked.insert(id);
+                }
+            }),
+            Action::MarkAll(ids) => self.with_scan(|s| s.marked.extend(ids)),
+            Action::ClearMarks => self.with_scan(|s| s.marked.clear()),
             Action::RevealInTab { root, path } => {
                 let index = (0..self.tab_count())
                     .find(|&i| self.tab(i).is_some_and(|(v, _)| v.tree.root_path() == root));
@@ -513,6 +545,9 @@ impl App {
             Action::SetDuplicateSha256(on) => self.settings.duplicate_sha256 = on,
             Action::ExportDuplicates => self.export_duplicates(),
             Action::Notify(text, is_error) => self.notify(text, is_error),
+            Action::Bulk(request) => self.bulk_request(request, ctx),
+            Action::RunBulkTrash => self.start_bulk(crate::bulk::Kind::Trash, ctx),
+            Action::RunBulkRename(plans) => self.start_bulk(crate::bulk::Kind::Rename(plans), ctx),
             Action::ToggleColumn(table, column) => self.settings.toggle_column(table, column),
             Action::SetColumnOrder(table, order) => {
                 let order = order.into_iter().map(str::to_owned).collect();
@@ -724,6 +759,132 @@ impl App {
                 .ta("export-failed", &[("error", e.to_string().into())]),
         };
         self.notify(text, result.is_err());
+    }
+
+    /// Asks where (for move, copy and zip) or confirms, then starts.
+    fn bulk_request(&mut self, request: BulkRequest, ctx: &egui::Context) {
+        let Some(scan) = &self.scan else { return };
+        let top = scan.marked_top();
+        if top.is_empty() || self.bulk.is_some() {
+            return;
+        }
+        let pick_folder = |title: &str| {
+            rfd::FileDialog::new()
+                .set_title(self.i18n.logical(title))
+                .pick_folder()
+        };
+        match request {
+            BulkRequest::MoveTo => {
+                if let Some(dest) = pick_folder("bulk-move-title") {
+                    self.start_bulk(crate::bulk::Kind::MoveTo(dest), ctx);
+                }
+            }
+            BulkRequest::CopyTo => {
+                if let Some(dest) = pick_folder("bulk-copy-title") {
+                    self.start_bulk(crate::bulk::Kind::CopyTo(dest), ctx);
+                }
+            }
+            BulkRequest::Zip => {
+                let name = match top.as_slice() {
+                    [one] => format!("{}.zip", scan.tree.name(*one)),
+                    _ => "archive.zip".to_owned(),
+                };
+                if let Some(archive) = rfd::FileDialog::new()
+                    .set_title(self.i18n.logical("bulk-zip-title"))
+                    .set_file_name(name)
+                    .add_filter("ZIP", &["zip"])
+                    .save_file()
+                {
+                    self.start_bulk(crate::bulk::Kind::Zip(archive), ctx);
+                }
+            }
+            BulkRequest::Rename => {
+                let paths = top.iter().map(|&id| scan.tree.path(id)).collect();
+                self.rename = Some(views::selection::RenameDialog::new(paths));
+            }
+            BulkRequest::Trash => self.confirm_bulk_trash = true,
+        }
+    }
+
+    /// Runs `kind` on the marked entries of the shown scan.
+    fn start_bulk(&mut self, kind: crate::bulk::Kind, ctx: &egui::Context) {
+        let Some(scan) = &self.scan else { return };
+        let items: Vec<(NodeId, PathBuf)> = match &kind {
+            crate::bulk::Kind::Rename(plans) => plans
+                .iter()
+                .map(|p| {
+                    (
+                        scan.tree.find(&p.from).unwrap_or(scan.tree.root()),
+                        p.from.clone(),
+                    )
+                })
+                .collect(),
+            _ => scan
+                .marked_top()
+                .into_iter()
+                .map(|id| (id, scan.tree.path(id)))
+                .collect(),
+        };
+        let bytes = items.iter().map(|(id, _)| scan.tree.node(*id).size).sum();
+        let root = scan.tree.root_path().to_path_buf();
+        match crate::bulk::Job::start(kind, items, bytes, ctx) {
+            Ok(job) => self.bulk = Some((job, root)),
+            Err(e) => self.notify(self.i18n.v(&e.to_string()), true),
+        }
+    }
+
+    /// Reports a finished bulk action and brings the scan up to date.
+    fn poll_bulk(&mut self) {
+        let Some((job, root)) = &self.bulk else {
+            return;
+        };
+        let Some(outcome) = job.poll() else { return };
+        let (kind, root) = (job.kind.clone(), root.clone());
+        self.bulk = None;
+        let ok: Vec<NodeId> = outcome
+            .iter()
+            .filter(|(_, r)| r.is_ok())
+            .map(|(id, _)| *id)
+            .collect();
+        let errors: Vec<&String> = outcome
+            .iter()
+            .filter_map(|(_, r)| r.as_ref().err())
+            .collect();
+        let i = &self.i18n;
+        let mut text = i.count(kind.done_id(), ok.len() as u64);
+        if let Some(first) = errors.first() {
+            text = format!(
+                "{text} · {}",
+                i.la(
+                    "dup-failed",
+                    &[
+                        ("count", (errors.len() as u64).into()),
+                        ("error", (*first).clone().into())
+                    ]
+                )
+            );
+        }
+        self.notify(i.v(&text), !errors.is_empty());
+        let shown = self.scan.as_mut().filter(|s| s.tree.root_path() == root);
+        // What changed on disk inside the scanned folder.
+        let changed_inside = match &kind {
+            crate::bulk::Kind::Trash => false,
+            crate::bulk::Kind::MoveTo(_) | crate::bulk::Kind::Rename(_) => !ok.is_empty(),
+            crate::bulk::Kind::CopyTo(dest) | crate::bulk::Kind::Zip(dest) => {
+                !ok.is_empty() && dest.starts_with(&root)
+            }
+        };
+        if let Some(scan) = shown {
+            for &id in &ok {
+                scan.marked.remove(&id);
+                if matches!(kind, crate::bulk::Kind::Trash) {
+                    scan.remove(id);
+                }
+            }
+        }
+        if changed_inside {
+            self.actions.push(Action::StartScan(root));
+        }
     }
 
     fn export_duplicates(&mut self) {
@@ -957,6 +1118,7 @@ impl eframe::App for App {
         self.size_window_on_first_launch(&ctx);
         self.poll_updater(&ctx);
         self.poll_emptying(&ctx);
+        self.poll_bulk();
         // Ctrl +/- zoom is built into egui; remember whatever the user picked.
         self.settings.ui_scale = ctx.zoom_factor();
 

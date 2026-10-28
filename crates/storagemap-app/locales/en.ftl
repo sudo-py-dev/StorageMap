@@ -70,6 +70,62 @@ tab-search = Search
 
 ## Columns
 columns-menu = Columns
+col-mark = ✔
+mark-hint = Mark for moving, copying, zipping, renaming or the trash (Ctrl-click a row also marks it)
+marked-summary = { $count } marked · { $size }
+marks-clear = Clear marks
+search-mark-all = Mark all
+search-mark-all-hint = Mark every result in this scan, to act on them together
+bulk-move = Move to…
+bulk-copy = Copy to…
+bulk-zip = Zip…
+bulk-rename = Rename…
+bulk-trash = Move to trash
+bulk-move-title = Move the marked items to
+bulk-copy-title = Copy the marked items to
+bulk-zip-title = Save the archive as
+bulk-trash-title = Move the marked items to the trash?
+bulk-trash-body = { $count } items ({ $size }) go to the trash. You can restore them from there.
+bulk-moving = Moving… { $done } of { $total }
+bulk-copying = Copying… { $done } of { $total }
+bulk-zipping = Zipping… { $done } of { $total }
+bulk-trashing = Moving to the trash… { $done } of { $total }
+bulk-renaming = Renaming… { $done } of { $total }
+bulk-moved =
+    { $count ->
+        [one] 1 item moved
+       *[other] { $n } items moved
+    }
+bulk-copied =
+    { $count ->
+        [one] 1 item copied
+       *[other] { $n } items copied
+    }
+bulk-zipped =
+    { $count ->
+        [one] 1 item zipped
+       *[other] { $n } items zipped
+    }
+bulk-trashed =
+    { $count ->
+        [one] 1 item moved to the trash
+       *[other] { $n } items moved to the trash
+    }
+bulk-renamed =
+    { $count ->
+        [one] 1 item renamed
+       *[other] { $n } items renamed
+    }
+rename-title = Rename the marked items
+rename-find = Find
+rename-replace = Replace with
+rename-match-case = Match case
+rename-preview = { $count } will be renamed:
+rename-apply = Rename
+rename-unchanged = no change
+rename-invalid = not a valid name
+rename-exists = that name is taken
+rename-duplicate = another item would get the same name
 column-earlier = Move earlier
 column-later = Move later
 columns-reset = Reset columns

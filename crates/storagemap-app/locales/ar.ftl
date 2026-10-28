@@ -74,6 +74,62 @@ tab-search = بحث
 
 ## Columns
 columns-menu = الأعمدة
+col-mark = ✔
+mark-hint = تحديد للنقل أو النسخ أو الضغط أو إعادة التسمية أو سلة المهملات (Ctrl مع النقر على صف يحدده أيضًا)
+marked-summary = { $count } محددة · { $size }
+marks-clear = مسح التحديد
+search-mark-all = تحديد الكل
+search-mark-all-hint = تحديد كل النتائج في هذا الفحص للعمل عليها معًا
+bulk-move = نقل إلى…
+bulk-copy = نسخ إلى…
+bulk-zip = ضغط…
+bulk-rename = إعادة تسمية…
+bulk-trash = نقل إلى سلة المهملات
+bulk-move-title = نقل العناصر المحددة إلى
+bulk-copy-title = نسخ العناصر المحددة إلى
+bulk-zip-title = حفظ الأرشيف باسم
+bulk-trash-title = نقل العناصر المحددة إلى سلة المهملات؟
+bulk-trash-body = سيُنقل { $count } عنصرًا ({ $size }) إلى سلة المهملات. يمكنك استعادتها من هناك.
+bulk-moving = جارٍ النقل… { $done } من { $total }
+bulk-copying = جارٍ النسخ… { $done } من { $total }
+bulk-zipping = جارٍ الضغط… { $done } من { $total }
+bulk-trashing = جارٍ النقل إلى سلة المهملات… { $done } من { $total }
+bulk-renaming = جارٍ إعادة التسمية… { $done } من { $total }
+bulk-moved =
+    { $count ->
+        [one] نُقل عنصر واحد
+       *[other] نُقل { $n } عنصرًا
+    }
+bulk-copied =
+    { $count ->
+        [one] نُسخ عنصر واحد
+       *[other] نُسخ { $n } عنصرًا
+    }
+bulk-zipped =
+    { $count ->
+        [one] ضُغط عنصر واحد
+       *[other] ضُغط { $n } عنصرًا
+    }
+bulk-trashed =
+    { $count ->
+        [one] نُقل عنصر واحد إلى سلة المهملات
+       *[other] نُقل { $n } عنصرًا إلى سلة المهملات
+    }
+bulk-renamed =
+    { $count ->
+        [one] أُعيدت تسمية عنصر واحد
+       *[other] أُعيدت تسمية { $n } عنصرًا
+    }
+rename-title = إعادة تسمية العناصر المحددة
+rename-find = بحث
+rename-replace = استبدال بـ
+rename-match-case = مطابقة حالة الأحرف
+rename-preview = ستُعاد تسمية { $count }:
+rename-apply = إعادة التسمية
+rename-unchanged = بلا تغيير
+rename-invalid = اسم غير صالح
+rename-exists = هذا الاسم مستخدم
+rename-duplicate = سيحصل عنصر آخر على الاسم نفسه
 column-earlier = نقل إلى الأمام
 column-later = نقل إلى الخلف
 columns-reset = إعادة ضبط الأعمدة

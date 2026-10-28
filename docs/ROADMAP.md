@@ -53,13 +53,15 @@ shared foundations the later items build on.
   confirmation, with a dry run first. *(Done: the confirmation lists every
   change, and each pair is compared byte by byte before it is replaced.)*
 
-## Phase 3 — Acting on files
+## Phase 3 — Acting on files (done)
 
 - Select many items and move them to the trash, move, copy or archive them
-  (zip), with a summary and confirmation before anything happens.
+  (zip), with a summary and confirmation before anything happens. *(Done:
+  tick boxes or Ctrl-click in Details, Largest files and Search.)*
 - Rule-based selection, such as "files older than two years over 100 MB".
+  *(Done: search with filters, then Mark all.)*
 - Bulk rename: replace characters or text in many names at once, with a
-  preview.
+  preview. *(Done.)*
 
 ## Phase 4 — Reports
 

@@ -10,6 +10,7 @@ pub mod duplicates;
 mod lists;
 mod node_menu;
 pub mod search;
+pub mod selection;
 pub mod settings;
 mod start;
 mod table;
@@ -208,6 +209,8 @@ pub struct ScanView {
     /// Folder shown by the central views.
     pub focus: NodeId,
     pub selected: Option<NodeId>,
+    /// Entries marked for a bulk action (move, copy, zip, rename, trash).
+    pub marked: HashSet<NodeId>,
     pub tab: Tab,
     /// When the tab last changed, for the content fade-in.
     pub tab_changed: Option<std::time::Instant>,
@@ -267,6 +270,7 @@ impl ScanView {
             scanning: false,
             focus: root,
             selected: Some(root),
+            marked: HashSet::new(),
             tab: Tab::default(),
             // Fade the results in when a scan finishes.
             tab_changed: Some(std::time::Instant::now()),
@@ -306,6 +310,28 @@ impl ScanView {
         }
     }
 
+    /// Marked entries without those inside a marked folder (acting on the
+    /// folder covers them), in tree order.
+    pub fn marked_top(&self) -> Vec<NodeId> {
+        let mut top: Vec<NodeId> = self
+            .marked
+            .iter()
+            .copied()
+            .filter(|&id| {
+                let mut cur = self.tree.parent(id);
+                while let Some(p) = cur {
+                    if self.marked.contains(&p) {
+                        return false;
+                    }
+                    cur = self.tree.parent(p);
+                }
+                true
+            })
+            .collect();
+        top.sort_unstable();
+        top
+    }
+
     /// The current search's results, as last shown in the Search tab.
     pub fn search_results(&self) -> &[search::Hit] {
         self.search.value()
@@ -318,7 +344,9 @@ impl ScanView {
         let focus = path(self.focus);
         let selected = self.selected.map(path);
         let expanded: Vec<_> = self.expanded.iter().map(|&id| path(id)).collect();
+        let marked: Vec<_> = self.marked.iter().map(|&id| path(id)).collect();
         self.tree = tree;
+        self.marked = marked.iter().filter_map(|p| self.tree.find(p)).collect();
         let root = self.tree.root();
         self.focus = self.tree.find(&focus).unwrap_or(root);
         self.selected = selected.and_then(|p| self.tree.find(&p));
@@ -413,6 +441,7 @@ impl ScanView {
 
     /// Removes a deleted entry and moves focus/selection off it.
     pub fn remove(&mut self, id: NodeId) {
+        self.marked.remove(&id);
         let parent = self.tree.parent(id).unwrap_or(self.tree.root());
         let ancestry = self.tree.ancestry(self.focus);
         self.tree.remove(id);

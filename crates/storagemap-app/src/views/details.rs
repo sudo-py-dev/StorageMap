@@ -1,6 +1,7 @@
 //! Details tab: the focused folder's entries, sortable by any column.
 
 use std::cmp::Ordering;
+use std::collections::HashSet;
 
 use egui::{Response, Ui};
 use storagemap_core::analysis::extension_of;
@@ -41,7 +42,8 @@ impl Default for Sort {
 }
 
 /// Columns in logical order and what each sorts by.
-const COLUMNS: [(Col, Option<SortBy>); 12] = [
+const COLUMNS: [(Col, Option<SortBy>); 13] = [
+    (table::MARK, None),
     (Col::flex("col-name"), Some(SortBy::Name)),
     (Col::fixed("col-size", 82.0, 1), Some(SortBy::Size)),
     (
@@ -119,6 +121,7 @@ struct Source<'a> {
     tree: &'a Tree,
     rows: &'a [NodeId],
     selected: Option<NodeId>,
+    marked: &'a HashSet<NodeId>,
     sort: &'a mut Sort,
 }
 
@@ -135,7 +138,8 @@ impl TableSource for Source<'_> {
         let id = self.rows[row];
         let node = self.tree.node(id);
         match col {
-            0 => {
+            0 => table::mark_cell(ui, env, id, self.marked.contains(&id)),
+            1 => {
                 let icon = if node.is_dir() {
                     crate::icons::FOLDER
                 } else if node.kind == Kind::Symlink {
@@ -151,16 +155,16 @@ impl TableSource for Source<'_> {
                     table::text(ui, env, &name, false);
                 }
             }
-            1 => table::text(ui, env, &env.size(node.size), true),
-            2 => table::text(ui, env, &env.size(node.allocated), true),
-            3 => table::share(ui, env, self.tree.share_of_parent(id, env.settings.metric)),
-            4 => table::text(ui, env, &fmt::count(node.files), true),
-            5 => table::text(ui, env, &fmt::count(node.dirs), true),
-            6 => table::text(ui, env, &fmt::date(node.modified), true),
-            8 => table::text(ui, env, &fmt::date(node.accessed), true),
-            9 => table::text(ui, env, &fmt::date(node.created), true),
-            10 => table::text(ui, env, &attribute_letters(node.flags), true),
-            11 => table::text(ui, env, &env.owner_name(node.owner), false),
+            2 => table::text(ui, env, &env.size(node.size), true),
+            3 => table::text(ui, env, &env.size(node.allocated), true),
+            4 => table::share(ui, env, self.tree.share_of_parent(id, env.settings.metric)),
+            5 => table::text(ui, env, &fmt::count(node.files), true),
+            6 => table::text(ui, env, &fmt::count(node.dirs), true),
+            7 => table::text(ui, env, &fmt::date(node.modified), true),
+            9 => table::text(ui, env, &fmt::date(node.accessed), true),
+            10 => table::text(ui, env, &fmt::date(node.created), true),
+            11 => table::text(ui, env, &attribute_letters(node.flags), true),
+            12 => table::text(ui, env, &env.owner_name(node.owner), false),
             _ => {
                 let ext = extension_of(self.tree.name_bytes(id));
                 let kind = if node.kind == Kind::File && !ext.is_empty() {
@@ -175,7 +179,8 @@ impl TableSource for Source<'_> {
 
     fn row_response(&mut self, env: &mut Env<'_>, row: usize, response: &Response) {
         let id = self.rows[row];
-        if response.double_clicked() && self.tree.node(id).is_dir() {
+        if table::mark_click(env, response, id) {
+        } else if response.double_clicked() && self.tree.node(id).is_dir() {
             env.push(Action::Focus(id));
         } else if response.clicked() {
             env.push(Action::Select(id));
@@ -225,6 +230,7 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         tree,
         rows,
         selected: scan.selected,
+        marked: &scan.marked,
         sort: &mut scan.details_sort,
     };
     table::show(ui, env, "details", &cols, &mut source);

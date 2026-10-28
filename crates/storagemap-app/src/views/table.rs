@@ -6,6 +6,7 @@ use egui_extras::{Column, TableBuilder};
 use super::Env;
 use crate::app::Action;
 use crate::widgets::{paint_text, share_bar};
+use storagemap_core::NodeId;
 
 pub const ROW_HEIGHT: f32 = 22.0;
 const HEADER_HEIGHT: f32 = 24.0;
@@ -217,6 +218,32 @@ fn column_menu(ui: &mut Ui, env: &mut Env<'_>, salt: &'static str, cols: &[Col])
     if ui.button(env.t("columns-reset")).clicked() {
         env.push(Action::ResetColumns(salt));
         ui.close();
+    }
+}
+
+/// The column of tick boxes that mark rows for bulk actions.
+pub const MARK: Col = Col::fixed("col-mark", 28.0, 0);
+
+/// A tick box marking `id` for bulk actions.
+pub fn mark_cell(ui: &mut Ui, env: &mut Env<'_>, id: NodeId, marked: bool) {
+    let mut on = marked;
+    if ui
+        .checkbox(&mut on, "")
+        .on_hover_text(env.t("mark-hint"))
+        .changed()
+    {
+        env.push(Action::ToggleMark(id));
+    }
+}
+
+/// Ctrl-click (Cmd on macOS) on a row toggles its mark; returns whether it did.
+pub fn mark_click(env: &mut Env<'_>, response: &Response, id: NodeId) -> bool {
+    let command = response.ctx.input(|i| i.modifiers.command);
+    if response.clicked() && command {
+        env.push(Action::ToggleMark(id));
+        true
+    } else {
+        false
     }
 }
 

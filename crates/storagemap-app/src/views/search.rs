@@ -205,6 +205,7 @@ struct HitList<'a> {
     others: &'a [ScanView],
     hits: &'a [Hit],
     selected: Option<NodeId>,
+    marked: &'a std::collections::HashSet<NodeId>,
 }
 
 impl TableSource for HitList<'_> {
@@ -222,9 +223,14 @@ impl TableSource for HitList<'_> {
         let tree = hit.tree(self.this, self.others);
         let node = tree.node(hit.id);
         match col {
-            0 => table::text(ui, env, &tree.name(hit.id), false),
-            1 => table::text(ui, env, &env.metric_text(node), true),
-            3 => table::text(ui, env, &crate::fmt::date(node.modified), true),
+            // Marks belong to this scan; other tabs' results cannot be marked here.
+            0 if hit.tab.is_none() => {
+                table::mark_cell(ui, env, hit.id, self.marked.contains(&hit.id));
+            }
+            0 => {}
+            1 => table::text(ui, env, &tree.name(hit.id), false),
+            2 => table::text(ui, env, &env.metric_text(node), true),
+            4 => table::text(ui, env, &crate::fmt::date(node.modified), true),
             _ => {
                 let parent = tree
                     .parent(hit.id)
@@ -239,7 +245,8 @@ impl TableSource for HitList<'_> {
         let hit = self.hits[row];
         match hit.tab {
             None => {
-                if response.double_clicked() {
+                if table::mark_click(env, response, hit.id) {
+                } else if response.double_clicked() {
                     env.push(Action::Focus(hit.id));
                 } else if response.clicked() {
                     env.push(Action::Select(hit.id));
@@ -397,6 +404,23 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView, others: &[ScanV
                 {
                     env.push(Action::CopySearch);
                 }
+                let mine: Vec<NodeId> = ids
+                    .iter()
+                    .filter(|h| h.tab.is_none())
+                    .map(|h| h.id)
+                    .collect();
+                if !mine.is_empty()
+                    && ui
+                        .button(format!(
+                            "{}  {}",
+                            crate::icons::CHECK,
+                            env.t("search-mark-all")
+                        ))
+                        .on_hover_text(env.t("search-mark-all-hint"))
+                        .clicked()
+                {
+                    env.push(Action::MarkAll(mine));
+                }
             });
         }
     });
@@ -410,6 +434,7 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView, others: &[ScanV
             others,
             hits: ids,
             selected: scan.selected,
+            marked: &scan.marked,
         },
     );
 }

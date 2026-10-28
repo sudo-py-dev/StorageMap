@@ -11,8 +11,8 @@ use storagemap_core::export::Include;
 use storagemap_core::{Backend, Metric};
 
 use super::{
-    Env, ScanView, Tab, changes, chart, cleanup, details, duplicates, lists, search, start,
-    tree_panel, treemap,
+    Env, ScanView, Tab, changes, chart, cleanup, details, duplicates, lists, search, selection,
+    start, tree_panel, treemap,
 };
 use crate::app::{Action, App, seconds};
 use crate::fmt;
@@ -575,6 +575,24 @@ pub fn status_bar(app: &mut App, ui: &mut Ui) {
                 return;
             };
             let i = &app.i18n;
+            if let Some((job, _)) = &app.bulk {
+                ui.add(egui::Spinner::new().size(12.0));
+                let done = job.done.load(std::sync::atomic::Ordering::Relaxed);
+                let (done, total) = if matches!(job.kind, crate::bulk::Kind::Zip(_)) {
+                    let size = |b| fmt::size(b, app.settings.unit, 1, |id| i.logical(id));
+                    (size(done), size(job.total))
+                } else {
+                    (fmt::count(done), fmt::count(job.total))
+                };
+                let line = i.ta(
+                    job.kind.working_id(),
+                    &[("done", done.into()), ("total", total.into())],
+                );
+                ui.label(RichText::new(line).small());
+                ui.ctx()
+                    .request_repaint_after(crate::scan_job::PROGRESS_REFRESH);
+                ui.separator();
+            }
             if scan.scanning
                 && let Some(job) = &app.job
             {
@@ -671,6 +689,7 @@ fn volume_of<'a>(
 }
 
 pub fn body(app: &mut App, ui: &mut Ui) {
+    let busy = app.bulk.is_some();
     let App {
         i18n,
         settings,
@@ -709,7 +728,7 @@ pub fn body(app: &mut App, ui: &mut Ui) {
                 });
             CentralPanel::default()
                 .frame(central)
-                .show(ui, |ui| central_view(ui, &mut env, scan, parked));
+                .show(ui, |ui| central_view(ui, &mut env, scan, parked, busy));
         }
         (None, Some(job)) => {
             let snap = job.progress.snapshot();
@@ -727,9 +746,16 @@ pub fn body(app: &mut App, ui: &mut Ui) {
 }
 
 /// `others` are the other open scan tabs (for searching them all).
-fn central_view(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView, others: &[ScanView]) {
+fn central_view(
+    ui: &mut Ui,
+    env: &mut Env<'_>,
+    scan: &mut ScanView,
+    others: &[ScanView],
+    busy: bool,
+) {
     breadcrumbs(ui, env, scan);
     cleanup_chip(ui, env, scan);
+    selection::bar(ui, env, scan, busy);
     ui.add_space(4.0);
     let before = scan.tab;
     // Wraps onto a second line in narrow windows instead of widening the panel.
@@ -972,6 +998,7 @@ fn release_notes(app: &mut App, ctx: &egui::Context) {
 
 pub fn modals(app: &mut App, ctx: &egui::Context) {
     release_notes(app, ctx);
+    selection::dialogs(app, ctx);
     if let (Some(id), Some(scan)) = (app.confirm_trash, &app.scan) {
         let i = &app.i18n;
         let node = scan.tree.node(id);
@@ -1176,6 +1203,8 @@ pub fn keyboard(app: &mut App, ctx: &egui::Context) {
     }
     if ctx.egui_wants_keyboard_input()
         || app.confirm_trash.is_some()
+        || app.confirm_bulk_trash
+        || app.rename.is_some()
         || app.confirm_empty.is_some()
         || app.show_export
         || app.show_settings
