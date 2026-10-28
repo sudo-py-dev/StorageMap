@@ -36,11 +36,11 @@ fn kind_label_id(kind: VolumeKind) -> &'static str {
 
 fn kind_icon(kind: VolumeKind) -> &'static str {
     match kind {
-        VolumeKind::Fixed => "🖴",
-        VolumeKind::Removable => "💾",
-        VolumeKind::Network => "🌐",
-        VolumeKind::Optical => "💿",
-        VolumeKind::Ram | VolumeKind::Unknown => "🗄",
+        VolumeKind::Fixed => crate::icons::DRIVE,
+        VolumeKind::Removable => crate::icons::USB,
+        VolumeKind::Network => crate::icons::NETWORK,
+        VolumeKind::Optical => crate::icons::DISC,
+        VolumeKind::Ram | VolumeKind::Unknown => crate::icons::MEMORY,
     }
 }
 
@@ -86,8 +86,12 @@ pub fn show(
                     ui.add_space(18.0);
                     row(ui, dir, |ui| {
                         let primary = theme::primary_button(
-                            RichText::new(format!("📂  {}", env.t("action-scan-folder")))
-                                .size(16.0),
+                            RichText::new(format!(
+                                "{}  {}",
+                                crate::icons::FOLDER_OPEN,
+                                env.t("action-scan-folder")
+                            ))
+                            .size(16.0),
                         )
                         .min_size(vec2(0.0, 36.0));
                         if ui.add(primary).clicked() {
@@ -125,11 +129,22 @@ fn admin_card(ui: &mut Ui, env: &mut Env<'_>) {
         .show(ui, |ui| {
             ui.set_max_width(620.0);
             ui.with_layout(Layout::top_down(env.i18n.dir().start()), |ui| {
-                ui.label(RichText::new(format!("⚡ {}", env.t("backend-mft"))).strong());
+                ui.label(
+                    RichText::new(format!(
+                        "{} {}",
+                        crate::icons::LIGHTNING,
+                        env.t("backend-mft")
+                    ))
+                    .strong(),
+                );
                 paragraph_small(ui, env.i18n, &env.i18n.logical("admin-hint"));
                 ui.add_space(4.0);
                 if ui
-                    .button(format!("🛡  {}", env.t("action-run-as-admin")))
+                    .button(format!(
+                        "{}  {}",
+                        crate::icons::SHIELD,
+                        env.t("action-run-as-admin")
+                    ))
                     .clicked()
                 {
                     env.push(Action::RunAsAdmin);
@@ -280,7 +295,7 @@ fn recent_row(ui: &mut Ui, env: &mut Env<'_>, path: &std::path::Path) {
     let fill = Color32::TRANSPARENT.lerp_to_gamma(visuals.widgets.hovered.bg_fill, hover);
     ui.painter().rect_filled(rect, theme::RADIUS, fill);
     let text = rect.shrink2(vec2(10.0, 0.0));
-    let label = format!("📁  {}", path.display());
+    let label = format!("{}  {}", crate::icons::FOLDER, path.display());
     paint_text(
         ui.painter(),
         env.i18n,
@@ -348,7 +363,10 @@ pub fn progress(
             false,
         );
         ui.add_space(16.0);
-        if ui.button(format!("⏹  {}", env.t("action-stop"))).clicked() {
+        if ui
+            .button(format!("{}  {}", crate::icons::STOP, env.t("action-stop")))
+            .clicked()
+        {
             env.push(Action::Stop);
         }
     });

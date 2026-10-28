@@ -55,13 +55,13 @@ impl Section {
 
     fn label(self) -> (&'static str, &'static str) {
         match self {
-            Section::General => ("⚙", "settings-general"),
-            Section::Appearance => ("🎨", "settings-appearance"),
-            Section::Scanning => ("🔍", "settings-scanning"),
-            Section::Integration => ("🧩", "settings-integration"),
-            Section::Updates => ("⟳", "settings-updates"),
-            Section::Shortcuts => ("⌨", "settings-shortcuts"),
-            Section::About => ("ℹ", "settings-about"),
+            Section::General => (crate::icons::GENERAL, "settings-general"),
+            Section::Appearance => (crate::icons::APPEARANCE, "settings-appearance"),
+            Section::Scanning => (crate::icons::SEARCH, "settings-scanning"),
+            Section::Integration => (crate::icons::INTEGRATION, "settings-integration"),
+            Section::Updates => (crate::icons::UPDATE, "settings-updates"),
+            Section::Shortcuts => (crate::icons::KEYBOARD, "settings-shortcuts"),
+            Section::About => (crate::icons::INFO, "settings-about"),
         }
     }
 }
@@ -312,7 +312,11 @@ fn scanning(
         });
         if !elevated
             && ui
-                .button(format!("🛡  {}", i18n.t("action-run-as-admin")))
+                .button(format!(
+                    "{}  {}",
+                    crate::icons::SHIELD,
+                    i18n.t("action-run-as-admin")
+                ))
                 .clicked()
         {
             actions.push(Action::RunAsAdmin);
@@ -362,7 +366,11 @@ fn updates(
     ui.add_space(6.0);
     if !updater.is_busy()
         && ui
-            .button(format!("⟳  {}", i18n.t("update-check-now")))
+            .button(format!(
+                "{}  {}",
+                crate::icons::UPDATE,
+                i18n.t("update-check-now")
+            ))
             .clicked()
     {
         updater.start_check(ctx);
@@ -380,7 +388,10 @@ pub fn status(ui: &mut Ui, i18n: &I18n, updater: &Updater, actions: &mut Vec<Act
             });
         }
         Updater::UpToDate => {
-            ui.colored_label(theme::SUCCESS, format!("✔ {}", i18n.t("update-up-to-date")));
+            ui.colored_label(
+                theme::SUCCESS,
+                format!("{} {}", crate::icons::CHECK, i18n.t("update-up-to-date")),
+            );
         }
         Updater::Available(release) => {
             ui.label(
@@ -508,7 +519,7 @@ fn about(ui: &mut Ui, i18n: &I18n) {
     paragraph_small(ui, i18n, &i18n.logical("about-privacy"));
     ui.add_space(8.0);
     ui.hyperlink_to(
-        format!("🔗 {}", i18n.t("about-source")),
+        format!("{} {}", crate::icons::GITHUB, i18n.t("about-source")),
         format!("https://github.com/{}", update::REPO),
     );
 }

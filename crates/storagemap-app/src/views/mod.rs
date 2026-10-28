@@ -97,6 +97,21 @@ impl Tab {
         Tab::Search,
     ];
 
+    pub fn icon(self) -> &'static str {
+        use crate::icons;
+        match self {
+            Tab::Treemap => icons::TREEMAP,
+            Tab::Details => icons::DETAILS,
+            Tab::TopFiles => icons::LARGEST,
+            Tab::Types => icons::TYPES,
+            Tab::Ages => icons::AGE,
+            Tab::Search => icons::SEARCH,
+            Tab::Changes => icons::CHANGES,
+            Tab::Duplicates => icons::DUPLICATES,
+            Tab::Cleanup => icons::CLEANUP,
+        }
+    }
+
     pub fn label_id(self) -> &'static str {
         match self {
             Tab::Treemap => "tab-treemap",
@@ -160,6 +175,8 @@ pub struct ScanView {
     /// Folder tree scroll offset and viewport height from the last frame.
     pub(super) tree_scroll: (f32, f32),
     pub search_query: String,
+    /// Ctrl+F asks the toolbar search box to take focus.
+    pub focus_search: bool,
     pub search_edited: Option<std::time::Instant>,
     pub details_sort: details::Sort,
     pub context_target: Option<NodeId>,
@@ -200,6 +217,7 @@ impl ScanView {
             scroll_tree_to: None,
             tree_scroll: (0.0, 0.0),
             search_query: String::new(),
+            focus_search: false,
             search_edited: None,
             details_sort: details::Sort::default(),
             context_target: None,

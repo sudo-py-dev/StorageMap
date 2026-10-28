@@ -112,11 +112,11 @@ impl TableSource for Source<'_> {
         match col {
             0 => {
                 let icon = if node.is_dir() {
-                    "📁"
+                    crate::icons::FOLDER
                 } else if node.kind == Kind::Symlink {
-                    "🔗"
+                    crate::icons::LINK
                 } else {
-                    "📄"
+                    crate::icons::FILE
                 };
                 table::text(ui, env, &format!("{icon} {}", self.tree.name(id)), false);
             }
@@ -178,7 +178,7 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         crate::widgets::empty_state(
             ui,
             env.i18n,
-            "📭",
+            crate::icons::FOLDER,
             "empty-folder",
             "empty-folder-hint",
             |_| {},

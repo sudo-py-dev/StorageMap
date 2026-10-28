@@ -217,13 +217,18 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
                     ("size", env.size(p.bytes_hashed.load(Relaxed)).into()),
                 ],
             ));
-            if ui.button(format!("⏹ {}", env.t("action-stop"))).clicked() {
+            if ui
+                .button(format!("{} {}", crate::icons::STOP, env.t("action-stop")))
+                .clicked()
+            {
                 p.cancel();
             }
             ui.ctx().request_repaint_after(PROGRESS_REFRESH);
         }
         _ => {
-            restart = ui.button(format!("🔍 {}", env.t("dup-find"))).clicked();
+            restart = ui
+                .button(format!("{} {}", crate::icons::SEARCH, env.t("dup-find")))
+                .clicked();
             ui.label(env.t("dup-min-size"));
             let current = env.settings.duplicate_min_size;
             egui::ComboBox::from_id_salt("dup-min")
@@ -259,7 +264,14 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     ui.add_space(4.0);
     match &scan.duplicates {
         State::Idle | State::Running { .. } => {
-            empty_state(ui, env.i18n, "🧬", "dup-empty-title", "dup-hint", |_| {});
+            empty_state(
+                ui,
+                env.i18n,
+                crate::icons::DUPLICATES,
+                "dup-empty-title",
+                "dup-hint",
+                |_| {},
+            );
         }
         State::Done {
             root,

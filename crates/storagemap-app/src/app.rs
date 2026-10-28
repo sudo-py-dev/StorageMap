@@ -116,6 +116,7 @@ impl App {
             .unwrap_or_default();
         cc.egui_ctx.set_theme(settings.theme.preference());
         crate::theme::install(&cc.egui_ctx);
+        crate::icons::install(&cc.egui_ctx);
         cc.egui_ctx.set_zoom_factor(settings.ui_scale);
         let mut app = App {
             i18n: I18n::new(settings.effective_lang()),

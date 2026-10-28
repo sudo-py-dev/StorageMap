@@ -28,6 +28,11 @@ const QUIT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Q)
 /// Seconds for the content cross-fade when switching tabs.
 const TAB_FADE: f32 = 0.18;
 const LOGO_SIZE: f32 = 22.0;
+const ICON_SIZE: f32 = 17.0;
+const SEARCH_WIDTH: f32 = 220.0;
+/// Below this width tabs show icons only (with tooltips).
+const TAB_TEXT_PADDING: f32 = 22.0;
+const TAB_GAP: f32 = 4.0;
 
 const METRICS: [(Metric, &str); 3] = [
     (Metric::Size, "metric-size"),
@@ -48,16 +53,15 @@ pub fn top_bar(app: &mut App, ui: &mut Ui) {
         row(ui, dir, |ui| {
             ui.add(egui::Image::new(&app.logo).fit_to_exact_size(vec2(LOGO_SIZE, LOGO_SIZE)));
             ui.label(RichText::new("StorageMap").strong().size(15.5));
-            ui.add_space(8.0);
+            ui.add_space(14.0);
+            // A real menu bar: plain text that highlights on hover.
+            let w = &mut ui.visuals_mut().widgets.inactive;
+            (w.bg_fill, w.weak_bg_fill) = (Color32::TRANSPARENT, Color32::TRANSPARENT);
             file_menu(app, ui);
             view_menu(app, ui);
             help_menu(app, ui);
             ui.with_layout(dir.end_row(), |ui| {
-                if ui
-                    .button("⚙")
-                    .on_hover_text(app.i18n.t("menu-settings"))
-                    .clicked()
-                {
+                if icon_button(ui, crate::icons::SETTINGS, &app.i18n.t("menu-settings")).clicked() {
                     app.actions.push(Action::OpenSettings);
                 }
                 language_menu(app, ui);
@@ -70,6 +74,12 @@ pub fn top_bar(app: &mut App, ui: &mut Ui) {
             .frame(frame)
             .show(ui, |ui| toolbar(app, ui));
     }
+}
+
+/// A frameless icon button that highlights on hover, with a tooltip.
+pub fn icon_button(ui: &mut Ui, icon: &str, tooltip: &str) -> egui::Response {
+    let button = egui::Button::new(RichText::new(icon).size(ICON_SIZE)).frame_when_inactive(false);
+    ui.add(button).on_hover_text(tooltip)
 }
 
 /// Menu contents aligned to the reading-start edge.
@@ -98,50 +108,80 @@ fn file_menu(app: &mut App, ui: &mut Ui) {
             item(
                 ui,
                 true,
-                shortcut_button(ui, format!("📂  {}", i.t("action-scan-folder")), &OPEN),
+                shortcut_button(
+                    ui,
+                    format!(
+                        "{}  {}",
+                        crate::icons::FOLDER_OPEN,
+                        i.t("action-scan-folder")
+                    ),
+                    &OPEN,
+                ),
                 Action::PickFolder,
             );
             item(
                 ui,
                 has_scan && !scanning,
-                egui::Button::new(format!("⟳  {}", i.t("action-rescan"))).shortcut_text("F5"),
+                egui::Button::new(format!(
+                    "{}  {}",
+                    crate::icons::RESCAN,
+                    i.t("action-rescan")
+                ))
+                .shortcut_text("F5"),
                 Action::Rescan,
             );
             item(
                 ui,
                 scanning,
-                egui::Button::new(format!("⏹  {}", i.t("action-stop"))).shortcut_text("Esc"),
+                egui::Button::new(format!("{}  {}", crate::icons::STOP, i.t("action-stop")))
+                    .shortcut_text("Esc"),
                 Action::Stop,
             );
             ui.separator();
             item(
                 ui,
                 has_scan,
-                egui::Button::new(format!("📸  {}", i.t("action-save-snapshot"))),
+                egui::Button::new(format!(
+                    "{}  {}",
+                    crate::icons::SNAPSHOT,
+                    i.t("action-save-snapshot")
+                )),
                 Action::SaveSnapshot,
             );
             item(
                 ui,
                 has_scan,
-                shortcut_button(ui, format!("⬇  {}", i.t("action-export-csv")), &EXPORT),
+                shortcut_button(
+                    ui,
+                    format!("{}  {}", crate::icons::EXPORT, i.t("action-export-csv")),
+                    &EXPORT,
+                ),
                 Action::ExportCsv,
             );
             ui.separator();
             item(
                 ui,
                 !scanning,
-                egui::Button::new(format!("🏠  {}", i.t("action-home"))),
+                egui::Button::new(format!("{}  {}", crate::icons::HOME, i.t("action-home"))),
                 Action::Home,
             );
             item(
                 ui,
                 true,
-                shortcut_button(ui, format!("⚙  {}", i.t("menu-settings")), &SETTINGS),
+                shortcut_button(
+                    ui,
+                    format!("{}  {}", crate::icons::SETTINGS, i.t("menu-settings")),
+                    &SETTINGS,
+                ),
                 Action::OpenSettings,
             );
             ui.separator();
             if ui
-                .add(shortcut_button(ui, i.t("action-quit"), &QUIT))
+                .add(shortcut_button(
+                    ui,
+                    format!("{}  {}", crate::icons::QUIT, i.t("action-quit")),
+                    &QUIT,
+                ))
                 .clicked()
             {
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -173,9 +213,12 @@ fn view_menu(app: &mut App, ui: &mut Ui) {
             }
             ui.separator();
             let ctx = ui.ctx().clone();
-            let zoom = |ui: &mut Ui, id: &str, shortcut: &str, factor: f32| {
+            let zoom = |ui: &mut Ui, icon: &str, id: &str, shortcut: &str, factor: f32| {
                 if ui
-                    .add(egui::Button::new(i18n.t(id)).shortcut_text(shortcut))
+                    .add(
+                        egui::Button::new(format!("{icon}  {}", i18n.t(id)))
+                            .shortcut_text(shortcut),
+                    )
                     .clicked()
                 {
                     let z = if factor == 0.0 {
@@ -186,9 +229,15 @@ fn view_menu(app: &mut App, ui: &mut Ui) {
                     ctx.set_zoom_factor(z);
                 }
             };
-            zoom(ui, "action-zoom-in", "Ctrl +", 1.1);
-            zoom(ui, "action-zoom-out", "Ctrl -", 1.0 / 1.1);
-            zoom(ui, "action-zoom-reset", "Ctrl 0", 0.0);
+            zoom(ui, crate::icons::ZOOM_IN, "action-zoom-in", "Ctrl +", 1.1);
+            zoom(
+                ui,
+                crate::icons::ZOOM_OUT,
+                "action-zoom-out",
+                "Ctrl -",
+                1.0 / 1.1,
+            );
+            zoom(ui, crate::icons::SEARCH, "action-zoom-reset", "Ctrl 0", 0.0);
         });
     });
 }
@@ -199,23 +248,29 @@ fn language_menu(app: &mut App, ui: &mut Ui) {
         || app.i18n.t("lang-system"),
         |l| crate::i18n::bidi::visual(l.native_name(), l.direction()),
     );
-    ui.menu_button(format!("🌐 {label}"), |ui| {
-        menu_column(app.i18n.dir(), ui, |ui| {
-            if ui
-                .radio(current.is_none(), app.i18n.t("lang-system"))
-                .clicked()
-            {
-                app.actions.push(Action::SetLang(None));
-            }
-            for lang in Lang::ALL {
-                // Each language names itself, in its own direction.
-                let name = crate::i18n::bidi::visual(lang.native_name(), lang.direction());
-                if ui.radio(current == Some(lang), name).clicked() {
-                    app.actions.push(Action::SetLang(Some(lang)));
+    let tooltip = format!("{} · {label}", app.i18n.t("menu-language"));
+    ui.menu_button(
+        RichText::new(crate::icons::LANGUAGE).size(ICON_SIZE),
+        |ui| {
+            menu_column(app.i18n.dir(), ui, |ui| {
+                if ui
+                    .radio(current.is_none(), app.i18n.t("lang-system"))
+                    .clicked()
+                {
+                    app.actions.push(Action::SetLang(None));
                 }
-            }
-        });
-    });
+                for lang in Lang::ALL {
+                    // Each language names itself, in its own direction.
+                    let name = crate::i18n::bidi::visual(lang.native_name(), lang.direction());
+                    if ui.radio(current == Some(lang), name).clicked() {
+                        app.actions.push(Action::SetLang(Some(lang)));
+                    }
+                }
+            });
+        },
+    )
+    .response
+    .on_hover_text(tooltip);
 }
 
 fn help_menu(app: &mut App, ui: &mut Ui) {
@@ -223,13 +278,21 @@ fn help_menu(app: &mut App, ui: &mut Ui) {
         menu_column(app.i18n.dir(), ui, |ui| {
             let i = &app.i18n;
             if ui
-                .button(format!("⟳  {}", i.t("action-check-updates")))
+                .button(format!(
+                    "{}  {}",
+                    crate::icons::RESCAN,
+                    i.t("action-check-updates")
+                ))
                 .clicked()
             {
                 app.actions.push(Action::CheckUpdates);
             }
             if ui
-                .button(format!("🔗  {}", i.t("action-open-github")))
+                .button(format!(
+                    "{}  {}",
+                    crate::icons::GITHUB,
+                    i.t("action-open-github")
+                ))
                 .clicked()
             {
                 app.actions.push(Action::OpenUrl(format!(
@@ -238,7 +301,10 @@ fn help_menu(app: &mut App, ui: &mut Ui) {
                 )));
             }
             ui.separator();
-            if ui.button(format!("ℹ  {}", i.t("help-about"))).clicked() {
+            if ui
+                .button(format!("{}  {}", crate::icons::INFO, i.t("help-about")))
+                .clicked()
+            {
                 app.actions.push(Action::About(true));
             }
         });
@@ -256,65 +322,76 @@ fn toolbar(app: &mut App, ui: &mut Ui) {
     } = app;
     let dir = i18n.dir();
     row(ui, dir, |ui| {
-        if ui
-            .add(theme::primary_button(format!(
-                "📂  {}",
-                i18n.t("action-scan-folder")
-            )))
-            .clicked()
-        {
+        let scan_button = theme::primary_button(format!(
+            "{}  {}",
+            crate::icons::FOLDER_OPEN,
+            i18n.t("action-scan-folder")
+        ));
+        if ui.add(scan_button).clicked() {
             actions.push(Action::PickFolder);
         }
-        if ui
-            .add_enabled(
-                job.is_none(),
-                egui::Button::new(format!("⟳  {}", i18n.t("action-rescan"))),
-            )
-            .clicked()
-        {
-            actions.push(Action::Rescan);
-        }
-        let can_go_up = scan
-            .as_ref()
-            .is_some_and(|s| s.tree.parent(s.focus).is_some());
-        let up = if i18n.is_rtl() { "➡" } else { "⬅" };
-        if ui
-            .add_enabled(
-                can_go_up,
-                egui::Button::new(format!("{up}  {}", i18n.t("action-up"))),
-            )
-            .clicked()
-        {
-            actions.push(Action::Up);
-        }
-        ui.add_space(6.0);
-        ui.separator();
-        ui.label(RichText::new(i18n.t("metric-label")).weak());
-        segmented(ui, dir, |ui| {
-            for (metric, id) in METRICS {
-                ui.selectable_value(&mut settings.metric, metric, i18n.t(id));
-            }
-        });
-        if let Some(job) = job {
-            ui.with_layout(dir.end_row(), |ui| {
-                if ui.button(format!("⏹  {}", i18n.t("action-stop"))).clicked() {
+        match job {
+            Some(job) => {
+                if ui
+                    .button(format!("{}  {}", crate::icons::STOP, i18n.t("action-stop")))
+                    .clicked()
+                {
                     actions.push(Action::Stop);
                 }
-                let snap = job.progress.snapshot();
-                ui.label(i18n.ta(
-                    "scan-progress",
-                    &[
-                        ("files", fmt::count(snap.files).into()),
-                        ("dirs", fmt::count(snap.dirs).into()),
-                        (
-                            "size",
-                            fmt::size(snap.bytes, settings.unit, 1, |id| i18n.logical(id)).into(),
-                        ),
-                    ],
-                ));
                 ui.spinner();
-            });
+                let snap = job.progress.snapshot();
+                let size = fmt::size(snap.bytes, settings.unit, 1, |id| i18n.logical(id));
+                ui.label(
+                    RichText::new(i18n.ta(
+                        "scan-progress",
+                        &[
+                            ("files", fmt::count(snap.files).into()),
+                            ("dirs", fmt::count(snap.dirs).into()),
+                            ("size", size.into()),
+                        ],
+                    ))
+                    .weak(),
+                );
+            }
+            None => {
+                if ui
+                    .button(format!(
+                        "{}  {}",
+                        crate::icons::RESCAN,
+                        i18n.t("action-rescan")
+                    ))
+                    .clicked()
+                {
+                    actions.push(Action::Rescan);
+                }
+            }
         }
+        ui.with_layout(dir.end_row(), |ui| {
+            if let Some(scan) = scan.as_mut() {
+                let env = Env {
+                    i18n,
+                    settings,
+                    actions,
+                };
+                lists::search_box(ui, &env, scan, SEARCH_WIDTH);
+            }
+            ui.add_space(8.0);
+            segmented(ui, dir, |ui| {
+                // `horizontal` inherits the flow of the end-aligned group it
+                // sits in; add items so they still read in the UI's direction.
+                let flows_rtl = ui.layout().prefer_right_to_left();
+                let reverse = (dir == Direction::Rtl) != flows_rtl;
+                let ordered: Vec<_> = if reverse {
+                    METRICS.iter().rev().collect()
+                } else {
+                    METRICS.iter().collect()
+                };
+                for (metric, id) in ordered {
+                    ui.selectable_value(&mut settings.metric, *metric, i18n.t(id));
+                }
+            });
+            ui.label(RichText::new(i18n.t("metric-label")).weak());
+        });
     });
 }
 
@@ -326,7 +403,10 @@ fn segmented(ui: &mut Ui, dir: Direction, add: impl FnOnce(&mut Ui)) {
         .inner_margin(Margin::same(2))
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
-            ui.with_layout(dir.row(), add);
+            // `horizontal` sizes to its content; a nested row layout would
+            // grab all remaining width.
+            let _ = dir;
+            ui.horizontal(add);
         });
 }
 
@@ -366,7 +446,7 @@ pub fn update_banner(app: &mut App, ui: &mut Ui) {
             ui.with_layout(i18n.dir().end_row(), |ui| {
                 if !updater.is_busy()
                     && ui
-                        .small_button("✕")
+                        .small_button(crate::icons::CLOSE)
                         .on_hover_text(i18n.t("update-later"))
                         .clicked()
                 {
@@ -386,7 +466,14 @@ pub fn status_bar(app: &mut App, ui: &mut Ui) {
                 return;
             };
             let i = &app.i18n;
-            ui.label(RichText::new(format!("⚡ {}", i.t(backend_label_id(scan.backend)))).small());
+            ui.label(
+                RichText::new(format!(
+                    "{} {}",
+                    crate::icons::LIGHTNING,
+                    i.t(backend_label_id(scan.backend))
+                ))
+                .small(),
+            );
             ui.separator();
             let done = i.ta(
                 "scan-done",
@@ -514,11 +601,12 @@ fn central_view(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     ui.add_space(4.0);
     let before = scan.tab;
     // Wraps onto a second line in narrow windows instead of widening the panel.
+    let compact = !tabs_fit(ui, env);
     let tabs = env.i18n.dir().row().with_main_wrap(true);
     ui.allocate_ui_with_layout(vec2(ui.available_width(), 0.0), tabs, |ui| {
-        ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+        ui.spacing_mut().item_spacing = vec2(TAB_GAP, TAB_GAP);
         for tab in Tab::ALL {
-            tab_pill(ui, env, &mut scan.tab, tab);
+            tab_pill(ui, env, &mut scan.tab, tab, compact);
         }
     });
     if scan.tab != before {
@@ -559,7 +647,8 @@ fn cleanup_chip(ui: &mut Ui, env: &Env<'_>, scan: &mut ScanView) {
         return;
     }
     let text = format!(
-        "✨ {}",
+        "{} {}",
+        crate::icons::SPARKLE,
         env.i18n
             .ta("cleanup-total", &[("size", env.size(reclaimable).into())])
     );
@@ -575,15 +664,40 @@ fn cleanup_chip(ui: &mut Ui, env: &Env<'_>, scan: &mut ScanView) {
     });
 }
 
+/// Whether every tab fits on one line with its label.
+fn tabs_fit(ui: &Ui, env: &Env<'_>) -> bool {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let total: f32 = Tab::ALL
+        .iter()
+        .map(|t| {
+            let text = format!("{}  {}", t.icon(), env.t(t.label_id()));
+            ui.painter()
+                .layout_no_wrap(text, font.clone(), Color32::PLACEHOLDER)
+                .size()
+                .x
+                + TAB_TEXT_PADDING
+                + TAB_GAP
+        })
+        .sum();
+    total <= ui.available_width()
+}
+
 /// A rounded tab with animated hover and selection.
-fn tab_pill(ui: &mut Ui, env: &Env<'_>, current: &mut Tab, tab: Tab) {
-    let text = env.t(tab.label_id());
-    let galley = ui.painter().layout_no_wrap(
-        text.clone(),
-        egui::TextStyle::Button.resolve(ui.style()),
-        Color32::PLACEHOLDER,
-    );
-    let size = galley.size() + vec2(24.0, 10.0);
+fn tab_pill(ui: &mut Ui, env: &Env<'_>, current: &mut Tab, tab: Tab, compact: bool) {
+    let label = env.t(tab.label_id());
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    // When space is tight only the selected tab keeps its name; the others
+    // show their icon, with the name in a tooltip.
+    let compact = compact && *current != tab;
+    let text = if compact {
+        tab.icon().to_owned()
+    } else {
+        format!("{}  {label}", tab.icon())
+    };
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text, font, Color32::PLACEHOLDER);
+    let size = galley.size() + vec2(if compact { 18.0 } else { TAB_TEXT_PADDING }, 10.0);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let selected = *current == tab;
     let t = ui
@@ -608,7 +722,12 @@ fn tab_pill(ui: &mut Ui, env: &Env<'_>, current: &mut Tab, tab: Tab) {
         galley,
         ink,
     );
-    response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Tab, true, selected, &text));
+    response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Tab, true, selected, &label));
+    let response = if compact {
+        response.on_hover_text(&label)
+    } else {
+        response
+    };
     if response.clicked() {
         *current = tab;
     }
@@ -616,37 +735,50 @@ fn tab_pill(ui: &mut Ui, env: &Env<'_>, current: &mut Tab, tab: Tab) {
 
 fn breadcrumbs(ui: &mut Ui, env: &mut Env<'_>, scan: &ScanView) {
     let separator = if env.i18n.is_rtl() { "‹" } else { "›" };
-    egui::ScrollArea::horizontal()
-        .id_salt("crumbs")
-        .show(ui, |ui| {
-            row(ui, env.i18n.dir(), |ui| {
-                ui.spacing_mut().item_spacing.x = 4.0;
-                for (i, id) in scan.tree.ancestry(scan.focus).into_iter().enumerate() {
-                    if i > 0 {
-                        ui.weak(separator);
-                    }
-                    let name = env.i18n.v(&scan.tree.name(id));
-                    let text = if id == scan.focus {
-                        RichText::new(name).strong()
-                    } else {
-                        RichText::new(name)
-                    };
-                    if ui
-                        .add(egui::Button::new(text).frame(id == scan.focus))
-                        .clicked()
-                    {
-                        env.push(Action::Focus(id));
-                    }
-                }
-                ui.add_space(8.0);
-                let node = scan.tree.node(scan.focus);
-                ui.label(
-                    RichText::new(env.i18n.v(&env.metric_text(node)))
-                        .strong()
-                        .color(theme::ACCENT_BRIGHT),
-                );
-            });
+    row(ui, env.i18n.dir(), |ui| {
+        // Up sits with the path it navigates.
+        let can_go_up = scan.tree.parent(scan.focus).is_some();
+        if ui
+            .add_enabled_ui(can_go_up, |ui| {
+                icon_button(ui, crate::icons::UP, &env.t("action-up"))
+            })
+            .inner
+            .clicked()
+        {
+            env.push(Action::Up);
+        }
+        let node = scan.tree.node(scan.focus);
+        let size = RichText::new(env.i18n.v(&env.metric_text(node)))
+            .strong()
+            .color(theme::ACCENT_BRIGHT);
+        ui.with_layout(env.i18n.dir().end_row(), |ui| {
+            ui.label(size);
+            egui::ScrollArea::horizontal()
+                .id_salt("crumbs")
+                .show(ui, |ui| {
+                    row(ui, env.i18n.dir(), |ui| {
+                        ui.spacing_mut().item_spacing.x = 4.0;
+                        for (i, id) in scan.tree.ancestry(scan.focus).into_iter().enumerate() {
+                            if i > 0 {
+                                ui.weak(separator);
+                            }
+                            let name = env.i18n.v(&scan.tree.name(id));
+                            let text = if id == scan.focus {
+                                RichText::new(name).strong()
+                            } else {
+                                RichText::new(name)
+                            };
+                            if ui
+                                .add(egui::Button::new(text).frame(id == scan.focus))
+                                .clicked()
+                            {
+                                env.push(Action::Focus(id));
+                            }
+                        }
+                    });
+                });
         });
+    });
 }
 
 /// "What's new" for an available update, with install / skip / later.
@@ -675,7 +807,10 @@ fn release_notes(app: &mut App, ctx: &egui::Context) {
                         paragraph(ui, i, &notes);
                     }
                 });
-            ui.hyperlink_to(format!("🔗 {}", i.t("action-open-github")), page);
+            ui.hyperlink_to(
+                format!("{} {}", crate::icons::GITHUB, i.t("action-open-github")),
+                page,
+            );
             ui.add_space(10.0);
             row(ui, i.dir(), |ui| {
                 let install_id = if installable {
@@ -717,7 +852,11 @@ pub fn modals(app: &mut App, ctx: &egui::Context) {
         let modal = Modal::new(Id::unique("confirm-trash")).show(ctx, |ui| {
             ui.set_width(440.0);
             ui.with_layout(Layout::top_down(i.dir().start()), |ui| {
-                ui.heading(format!("🗑  {}", i.t("confirm-trash-title")));
+                ui.heading(format!(
+                    "{}  {}",
+                    crate::icons::TRASH,
+                    i.t("confirm-trash-title")
+                ));
                 ui.add_space(4.0);
                 paragraph(ui, i, &body);
                 ui.add_space(12.0);
@@ -767,7 +906,11 @@ pub fn toast(app: &App, ctx: &egui::Context) {
                 .inner_margin(Margin::symmetric(16, 8))
                 .stroke(Stroke::new(1.5, accent))
                 .show(ui, |ui| {
-                    let icon = if toast.is_error { "⚠" } else { "✔" };
+                    let icon = if toast.is_error {
+                        crate::icons::WARNING
+                    } else {
+                        crate::icons::CHECK
+                    };
                     row(ui, app.i18n.dir(), |ui| {
                         ui.colored_label(accent, icon);
                         ui.label(&toast.text);
@@ -793,7 +936,7 @@ pub fn keyboard(app: &mut App, ctx: &egui::Context) {
     if shortcut(FIND)
         && let Some(scan) = &mut app.scan
     {
-        scan.tab = Tab::Search;
+        scan.focus_search = true;
     }
     if ctx.egui_wants_keyboard_input() || app.confirm_trash.is_some() || app.show_settings {
         return;

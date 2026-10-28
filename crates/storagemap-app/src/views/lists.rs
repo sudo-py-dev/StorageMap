@@ -12,7 +12,7 @@ use crate::app::Action;
 use crate::filetype::Category;
 use crate::fmt;
 use crate::i18n::{Direction, bidi};
-use crate::widgets::{empty_state, row};
+use crate::widgets::empty_state;
 
 const TOP_FILES: usize = 500;
 const SEARCH_LIMIT: usize = 2_000;
@@ -242,17 +242,28 @@ pub fn ages(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     );
 }
 
-pub fn search(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
+/// The toolbar search field. Typing switches to the Search tab.
+pub fn search_box(ui: &mut Ui, env: &Env<'_>, scan: &mut ScanView, width: f32) {
     let mut layouter = bidi_layouter(env.i18n.dir());
-    row(ui, env.i18n.dir(), |ui| {
-        let edit = egui::TextEdit::singleline(&mut scan.search_query)
-            .hint_text(env.t("search-hint"))
-            .desired_width(320.0)
-            .layouter(&mut layouter);
-        if ui.add(edit).changed() {
-            scan.search_edited = Some(Instant::now());
+    let hint = format!("{}  {}", crate::icons::SEARCH, env.t("search-hint"));
+    let edit = egui::TextEdit::singleline(&mut scan.search_query)
+        .hint_text(hint)
+        .desired_width(width)
+        .layouter(&mut layouter);
+    let response = ui.add(edit);
+    if std::mem::take(&mut scan.focus_search) {
+        response.request_focus();
+    }
+    if response.changed() {
+        scan.search_edited = Some(Instant::now());
+        if scan.tab != super::Tab::Search {
+            scan.tab = super::Tab::Search;
+            scan.tab_changed = Some(Instant::now());
         }
-    });
+    }
+}
+
+pub fn search(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     let settled = scan
         .search_edited
         .is_none_or(|t| t.elapsed() >= SEARCH_DEBOUNCE);
@@ -261,7 +272,14 @@ pub fn search(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     }
     let query = scan.search_query.trim().to_owned();
     if query.is_empty() {
-        empty_state(ui, env.i18n, "🔍", "tab-search", "search-empty", |_| {});
+        empty_state(
+            ui,
+            env.i18n,
+            crate::icons::SEARCH,
+            "tab-search",
+            "search-empty",
+            |_| {},
+        );
         return;
     }
     let (tree, focus) = (&scan.tree, scan.focus);

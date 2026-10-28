@@ -13,11 +13,11 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, tree: &Tree, id: NodeId) {
         let node = tree.node(id);
         let mut item = |ui: &mut Ui, label: &str, action: Action| {
             let icon = match label {
-                "action-scan-this" => "🔍",
-                "action-open" => "📂",
-                "action-show-in-folder" => "🗂",
-                "action-copy-path" => "📋",
-                "action-trash" => "🗑",
+                "action-scan-this" => crate::icons::SEARCH,
+                "action-open" => crate::icons::OPEN,
+                "action-show-in-folder" => crate::icons::REVEAL,
+                "action-copy-path" => crate::icons::COPY,
+                "action-trash" => crate::icons::TRASH,
                 _ => "",
             };
             if ui.button(format!("{icon}  {}", env.t(label))).clicked() {

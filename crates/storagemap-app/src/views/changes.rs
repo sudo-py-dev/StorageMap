@@ -81,7 +81,11 @@ impl TableSource for Source<'_> {
                 let node = self.tree.node(id);
                 match col {
                     0 => {
-                        let icon = if node.is_dir() { "📁" } else { "📄" };
+                        let icon = if node.is_dir() {
+                            crate::icons::FOLDER
+                        } else {
+                            crate::icons::FILE
+                        };
                         table::text(ui, env, &format!("{icon} {}", self.tree.name(id)), false);
                     }
                     1 => match self.cmp.change(self.tree, id) {
@@ -100,7 +104,11 @@ impl TableSource for Source<'_> {
                 let weak = ui.visuals().weak_text_color();
                 match col {
                     0 => {
-                        let icon = if removed.is_dir { "📁" } else { "📄" };
+                        let icon = if removed.is_dir {
+                            crate::icons::FOLDER
+                        } else {
+                            crate::icons::FILE
+                        };
                         let name = removed
                             .path
                             .file_name()
@@ -191,14 +199,25 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
 fn picker(ui: &mut Ui, env: &mut Env<'_>, scan: &ScanView) {
     ui.with_layout(egui::Layout::top_down(env.i18n.dir().start()), |ui| {
         if scan.snapshots.is_empty() {
-            empty_state(ui, env.i18n, "🕓", "compare-title", "compare-none", |_| {});
+            empty_state(
+                ui,
+                env.i18n,
+                crate::icons::CHANGES,
+                "compare-title",
+                "compare-none",
+                |_| {},
+            );
         } else {
             ui.heading(env.t("compare-title"));
             snapshot_menu(ui, env, scan);
         }
         ui.add_space(8.0);
         if ui
-            .button(format!("📂 {}", env.t("compare-browse")))
+            .button(format!(
+                "{} {}",
+                crate::icons::FOLDER_OPEN,
+                env.t("compare-browse")
+            ))
             .clicked()
         {
             env.push(Action::BrowseSnapshot);

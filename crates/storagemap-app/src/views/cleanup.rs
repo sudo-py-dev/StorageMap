@@ -18,14 +18,26 @@ const PREVIEW: usize = 5;
 
 fn label(kind: CleanupKind) -> (&'static str, &'static str, &'static str) {
     match kind {
-        CleanupKind::Trash => ("🗑", "cleanup-trash", "cleanup-trash-hint"),
-        CleanupKind::Cache => ("🗃", "cleanup-cache", "cleanup-cache-hint"),
-        CleanupKind::BuildOutput => ("🛠", "cleanup-build", "cleanup-build-hint"),
-        CleanupKind::PackageCache => ("📦", "cleanup-packages", "cleanup-packages-hint"),
-        CleanupKind::Temp => ("⏳", "cleanup-temp", "cleanup-temp-hint"),
-        CleanupKind::Logs => ("📜", "cleanup-logs", "cleanup-logs-hint"),
-        CleanupKind::CrashDumps => ("💥", "cleanup-dumps", "cleanup-dumps-hint"),
-        CleanupKind::OldDownloads => ("⬇", "cleanup-downloads", "cleanup-downloads-hint"),
+        CleanupKind::Trash => (crate::icons::TRASH, "cleanup-trash", "cleanup-trash-hint"),
+        CleanupKind::Cache => (
+            crate::icons::DATABASE,
+            "cleanup-cache",
+            "cleanup-cache-hint",
+        ),
+        CleanupKind::BuildOutput => (crate::icons::WRENCH, "cleanup-build", "cleanup-build-hint"),
+        CleanupKind::PackageCache => (
+            crate::icons::PACKAGE,
+            "cleanup-packages",
+            "cleanup-packages-hint",
+        ),
+        CleanupKind::Temp => (crate::icons::HOURGLASS, "cleanup-temp", "cleanup-temp-hint"),
+        CleanupKind::Logs => (crate::icons::SCROLL, "cleanup-logs", "cleanup-logs-hint"),
+        CleanupKind::CrashDumps => (crate::icons::BUG, "cleanup-dumps", "cleanup-dumps-hint"),
+        CleanupKind::OldDownloads => (
+            crate::icons::DOWNLOAD,
+            "cleanup-downloads",
+            "cleanup-downloads-hint",
+        ),
     }
 }
 
@@ -50,7 +62,7 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         empty_state(
             ui,
             env.i18n,
-            "✨",
+            crate::icons::SPARKLE,
             "cleanup-none-title",
             "cleanup-none",
             |_| {},
@@ -92,7 +104,11 @@ fn summary(ui: &mut Ui, env: &Env<'_>, total: u64) {
                 let headline = env
                     .i18n
                     .ta("cleanup-total", &[("size", env.size(total).into())]);
-                ui.label(RichText::new(format!("✨ {headline}")).size(20.0).strong());
+                ui.label(
+                    RichText::new(format!("{} {headline}", crate::icons::SPARKLE))
+                        .size(20.0)
+                        .strong(),
+                );
                 paragraph_small(ui, env.i18n, &env.i18n.logical("cleanup-hint"));
             });
         });
@@ -192,13 +208,17 @@ fn item(ui: &mut Ui, env: &mut Env<'_>, tree: &Tree, id: NodeId, size: u64) {
             .layout(dir.end_row()),
         |ui| {
             if ui
-                .small_button(format!("🗑 {}", env.t("confirm-trash")))
+                .small_button(format!(
+                    "{} {}",
+                    crate::icons::TRASH,
+                    env.t("confirm-trash")
+                ))
                 .clicked()
             {
                 actions.push(Action::AskTrash(id));
             }
             if ui
-                .small_button("🗂")
+                .small_button(crate::icons::REVEAL)
                 .on_hover_text(env.t("action-show-in-folder"))
                 .clicked()
             {

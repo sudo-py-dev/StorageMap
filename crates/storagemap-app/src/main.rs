@@ -10,6 +10,7 @@ mod devshot;
 mod filetype;
 mod fmt;
 mod i18n;
+mod icons;
 mod platform;
 mod scan_job;
 mod settings;
