@@ -15,7 +15,7 @@ struct Portable;
 
 pub(crate) fn scan(
     root: &Path,
-    _opts: &ScanOptions,
+    opts: &ScanOptions,
     progress: &ScanProgress,
 ) -> Result<(Tree, Backend), ScanError> {
     let meta = fs::metadata(root).map_err(|e| ScanError::io(root, e))?;
@@ -23,8 +23,8 @@ pub(crate) fn scan(
         return Err(ScanError::NotADirectory(root.to_path_buf()));
     }
     let root_info = walk::dir_info(modified(&meta), 0);
-    let tree =
-        walk::walk(&Portable, root, root_info, progress).map_err(|e| ScanError::io(root, e))?;
+    let tree = walk::walk(&Portable, root, root_info, &opts.filter.compile(), progress)
+        .map_err(|e| ScanError::io(root, e))?;
     Ok((tree, Backend::Portable))
 }
 

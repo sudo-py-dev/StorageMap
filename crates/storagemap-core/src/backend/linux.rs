@@ -60,8 +60,8 @@ pub(crate) fn scan(
         seen_links: (0..LINK_SHARDS).map(|_| Mutex::default()).collect(),
     };
     let root_info = walk::dir_info(st.stx_mtime.tv_sec, st.stx_blocks * BLOCK_UNIT);
-    let tree =
-        walk::walk(&platform, root, root_info, progress).map_err(|e| ScanError::io(root, e))?;
+    let tree = walk::walk(&platform, root, root_info, &opts.filter.compile(), progress)
+        .map_err(|e| ScanError::io(root, e))?;
     Ok((tree, Backend::LinuxStatx))
 }
 

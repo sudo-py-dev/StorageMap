@@ -21,6 +21,7 @@ use windows_sys::Win32::System::IO::DeviceIoControl;
 use windows_sys::Win32::System::Ioctl::{FSCTL_GET_NTFS_VOLUME_DATA, NTFS_VOLUME_DATA_BUFFER};
 
 use super::{open, volume_of};
+use crate::filter::Matcher;
 use crate::ntfs::{self, NAMESPACE_DOS, ROOT_RECORD, Run};
 use crate::progress::ScanProgress;
 use crate::tree::{EntryInfo, Flags, Kind, NodeId, Tree, TreeBuilder};
@@ -73,7 +74,7 @@ struct ChunkOut {
     records: Vec<(u32, ntfs::Record)>,
 }
 
-pub(super) fn scan(root: &Path, progress: &ScanProgress) -> io::Result<Tree> {
+pub(super) fn scan(root: &Path, filter: &Matcher, progress: &ScanProgress) -> io::Result<Tree> {
     let root = std::path::absolute(root)?;
     let (mount, device) = volume_of(&root)?;
     let device = device.to_string_lossy().trim_end_matches('\\').to_owned();
@@ -89,7 +90,7 @@ pub(super) fn scan(root: &Path, progress: &ScanProgress) -> io::Result<Tree> {
     let rel = root.strip_prefix(&mount).unwrap_or(Path::new(""));
     let children = index_children(&table);
     let start = locate(&table, &children, rel).ok_or(io::ErrorKind::NotFound)?;
-    Ok(build(&root, &table, &children, start))
+    Ok(build(&root, &table, &children, start, filter))
 }
 
 fn geometry(volume: &OwnedHandle) -> io::Result<Geometry> {
@@ -360,7 +361,9 @@ fn locate(table: &Table, children: &Children, rel: &Path) -> Option<u32> {
     Some(cur)
 }
 
-fn build(root: &Path, table: &Table, children: &Children, start: u32) -> Tree {
+/// `filter` is applied while linking records into the tree, so excluded
+/// folders and everything below them never enter it.
+fn build(root: &Path, table: &Table, children: &Children, start: u32, filter: &Matcher) -> Tree {
     let info = |m: &Meta| {
         let reparse = m.attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0;
         let kind = match (m.is_dir, reparse) {
@@ -391,13 +394,19 @@ fn build(root: &Path, table: &Table, children: &Children, start: u32) -> Tree {
     .with_capacity(table.links.len(), table.names.len());
     let mut seen = vec![false; table.meta.len()];
     seen[start as usize] = true;
-    let mut queue = VecDeque::from([(start, NodeId::ROOT)]);
-    while let Some((record, node)) = queue.pop_front() {
+    // Each queued folder carries its path relative to `root` when the filter
+    // has path patterns.
+    let mut queue = VecDeque::from([(start, NodeId::ROOT, String::new())]);
+    while let Some((record, node, rel)) = queue.pop_front() {
         for link in children.of(record) {
             let Some(meta) = table.meta.get(link.child as usize).filter(|m| m.in_use) else {
                 continue;
             };
             let mut entry = info(meta);
+            let name = link_name(table, link);
+            if filter.skips(&rel, name, entry.kind == Kind::Dir) {
+                continue;
+            }
             let first = !std::mem::replace(&mut seen[link.child as usize], true);
             if !first {
                 if meta.is_dir {
@@ -405,9 +414,16 @@ fn build(root: &Path, table: &Table, children: &Children, start: u32) -> Tree {
                 }
                 entry.flags.insert(Flags::HARDLINK_DUP);
             }
-            let id = builder.push(node, link_name(table, link), entry);
+            let id = builder.push(node, name, entry);
             if entry.kind == Kind::Dir {
-                queue.push_back((link.child, id));
+                let child_rel = if !filter.needs_path() {
+                    String::new()
+                } else if rel.is_empty() {
+                    String::from_utf8_lossy(name).into_owned()
+                } else {
+                    format!("{rel}/{}", String::from_utf8_lossy(name))
+                };
+                queue.push_back((link.child, id, child_rel));
             }
         }
     }

@@ -29,8 +29,9 @@ pub(crate) fn scan(
     opts: &ScanOptions,
     progress: &ScanProgress,
 ) -> Result<(Tree, Backend), ScanError> {
+    let filter = opts.filter.compile();
     if opts.prefer_mft {
-        match mft::scan(root, progress) {
+        match mft::scan(root, &filter, progress) {
             Ok(tree) => return Ok((tree, Backend::NtfsMft)),
             Err(_) if progress.is_cancelled() => {
                 return Ok((cancelled_tree(root), Backend::NtfsMft));
@@ -38,7 +39,7 @@ pub(crate) fn scan(
             Err(err) => tracing::info!(%err, "MFT scan unavailable, using directory listings"),
         }
     }
-    dirinfo::scan(root, progress).map(|tree| (tree, Backend::WindowsDirInfo))
+    dirinfo::scan(root, &filter, progress).map(|tree| (tree, Backend::WindowsDirInfo))
 }
 
 fn cancelled_tree(root: &Path) -> Tree {

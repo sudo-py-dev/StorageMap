@@ -395,6 +395,7 @@ impl App {
             cross_filesystems: self.settings.cross_filesystems,
             prefer_mft: self.settings.prefer_mft,
             threads: 0,
+            filter: self.settings.scan_filter.clone(),
         };
         match ScanJob::start(path, opts, ctx.clone()) {
             Ok(job) => self.job = Some(job),

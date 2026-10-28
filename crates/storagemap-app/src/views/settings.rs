@@ -306,6 +306,20 @@ fn scanning(
                 }
             });
     });
+    patterns(
+        ui,
+        i18n,
+        "scan-exclude",
+        "scan-exclude-hint",
+        &mut settings.scan_filter.exclude,
+    );
+    patterns(
+        ui,
+        i18n,
+        "scan-include",
+        "scan-include-hint",
+        &mut settings.scan_filter.include_files,
+    );
     if platform::ELEVATION_HELPS {
         row(ui, i18n, "option-mft", Some("setting-mft-hint"), |ui| {
             toggle(ui, &mut settings.prefer_mft, i18n.is_rtl());
@@ -322,6 +336,22 @@ fn scanning(
             actions.push(Action::RunAsAdmin);
         }
     }
+}
+
+/// A multi-line editor for glob patterns, one per line.
+fn patterns(ui: &mut Ui, i18n: &I18n, title_id: &str, hint_id: &str, list: &mut Vec<String>) {
+    ui.label(RichText::new(i18n.t(title_id)).strong());
+    paragraph_small(ui, i18n, &i18n.logical(hint_id));
+    // Blank lines are kept while typing; the scanner ignores them.
+    let mut text = list.join("\n");
+    let edit = egui::TextEdit::multiline(&mut text)
+        .code_editor()
+        .desired_rows(3)
+        .desired_width(f32::INFINITY);
+    if ui.add(edit).changed() {
+        *list = text.split('\n').map(str::to_owned).collect();
+    }
+    ui.add_space(10.0);
 }
 
 fn integration(ui: &mut Ui, i18n: &I18n, actions: &mut Vec<Action>) {

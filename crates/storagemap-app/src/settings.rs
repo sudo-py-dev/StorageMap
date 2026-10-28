@@ -3,8 +3,8 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use storagemap_core::Metric;
 use storagemap_core::export::Include;
+use storagemap_core::{Metric, ScanFilter};
 
 use crate::fmt::Unit;
 use crate::i18n::Lang;
@@ -75,6 +75,8 @@ pub struct Settings {
     pub export_include: Include,
     /// Write sizes in the CSV report as "1.4 GB" rather than bytes.
     pub export_readable: bool,
+    /// Files and folders every scan leaves out or limits itself to.
+    pub scan_filter: ScanFilter,
 }
 
 impl Default for Settings {
@@ -100,6 +102,7 @@ impl Default for Settings {
             skipped_update: None,
             export_include: Include::All,
             export_readable: true,
+            scan_filter: ScanFilter::default(),
         }
     }
 }

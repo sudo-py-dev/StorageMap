@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use storagemap_core::{Metric, ScanOptions, ScanProgress, analysis, export};
+use storagemap_core::{Metric, ScanFilter, ScanOptions, ScanProgress, analysis, export};
 
 use crate::fmt;
 
@@ -26,6 +26,8 @@ OPTIONS:
     --allocated    rank by size on disk instead of logical size
     --cross-fs     descend into other mounted filesystems
     --no-mft       Windows: never read the NTFS MFT directly
+    --exclude PAT  leave out files and folders matching PAT (repeatable)
+    --include PAT  count only files matching PAT (repeatable)
     -h, --help     show this help
     -V, --version  show the version";
 
@@ -41,6 +43,7 @@ pub struct Args {
     pub allocated: bool,
     pub cross_fs: bool,
     pub no_mft: bool,
+    pub filter: ScanFilter,
 }
 
 impl Args {
@@ -60,6 +63,8 @@ impl Args {
                 Some("--top") => out.top = Some(number(&value("--top")?)?),
                 Some("--depth") => out.depth = Some(number(&value("--depth")?)?),
                 Some("--csv") => out.csv = Some(PathBuf::from(value("--csv")?)),
+                Some("--exclude") => out.filter.exclude.push(text(value("--exclude")?)),
+                Some("--include") => out.filter.include_files.push(text(value("--include")?)),
                 Some(flag) if flag.starts_with('-') && flag.len() > 1 => {
                     return Err(format!("unknown option {flag}"));
                 }
@@ -68,6 +73,10 @@ impl Args {
         }
         Ok(out)
     }
+}
+
+fn text(s: OsString) -> String {
+    s.to_string_lossy().into_owned()
 }
 
 fn number(s: &OsString) -> Result<usize, String> {
@@ -94,6 +103,7 @@ pub fn run(args: &Args) -> ExitCode {
         cross_filesystems: args.cross_fs,
         prefer_mft: !args.no_mft,
         threads: 0,
+        filter: args.filter.clone(),
     };
     let progress = ScanProgress::new();
     let result = match storagemap_core::scan(path, &opts, &progress) {
@@ -196,9 +206,14 @@ mod tests {
             "--csv",
             "out.csv",
             "--allocated",
+            "--exclude",
+            "node_modules",
+            "--exclude",
+            "*.tmp",
         ])
         .expect("parse");
         assert!(a.cli && a.allocated);
+        assert_eq!(a.filter.exclude, ["node_modules", "*.tmp"]);
         assert_eq!(a.path, Some(PathBuf::from("/data")));
         assert_eq!(a.top, Some(5));
         assert_eq!(a.csv, Some(PathBuf::from("out.csv")));

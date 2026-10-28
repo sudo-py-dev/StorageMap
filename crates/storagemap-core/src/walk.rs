@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use rayon::prelude::*;
 
+use crate::filter::Matcher;
 use crate::progress::ScanProgress;
 use crate::tree::{EntryInfo, Flags, Kind, NodeId, Tree, TreeBuilder};
 
@@ -62,6 +63,7 @@ pub(crate) fn walk<P: Platform>(
     platform: &P,
     root: &Path,
     root_info: EntryInfo,
+    filter: &Matcher,
     progress: &ScanProgress,
 ) -> io::Result<Tree> {
     let dir = platform.open_root(root)?;
@@ -70,17 +72,32 @@ pub(crate) fn walk<P: Platform>(
         info: root_info,
         descend: true,
     };
-    let raw = walk_dir(platform, dir, root.to_path_buf(), root_entry, progress);
+    let ctx = Ctx {
+        platform,
+        filter,
+        progress,
+    };
+    let raw = walk_dir(&ctx, dir, root.to_path_buf(), String::new(), root_entry);
     Ok(flatten(root.to_path_buf(), raw))
 }
 
+/// What every level of the walk shares.
+struct Ctx<'a, P> {
+    platform: &'a P,
+    filter: &'a Matcher,
+    progress: &'a ScanProgress,
+}
+
+/// `rel` is `path` relative to the scan root (`/`-separated), kept only when
+/// the filter has path patterns.
 fn walk_dir<P: Platform>(
-    platform: &P,
+    ctx: &Ctx<'_, P>,
     dir: P::Dir,
     path: PathBuf,
+    rel: String,
     me: RawEntry,
-    progress: &ScanProgress,
 ) -> RawDir {
+    let (platform, filter, progress) = (ctx.platform, ctx.filter, ctx.progress);
     if progress.is_cancelled() {
         return RawDir::leaf(me, Flags::INCOMPLETE);
     }
@@ -91,6 +108,7 @@ fn walk_dir<P: Platform>(
         progress.add_error();
         flags.insert(Flags::ERROR);
     }
+    entries.retain(|e| !filter.skips(&rel, &e.name, e.info.kind == Kind::Dir));
 
     let (to_descend, files): (Vec<_>, Vec<_>) = entries.into_iter().partition(|e| e.descend);
     let file_bytes = files.iter().map(|f| f.info.size).sum();
@@ -100,8 +118,18 @@ fn walk_dir<P: Platform>(
         .into_par_iter()
         .map(|entry| {
             let child_path = path.join(name_to_os(&entry.name));
+            let child_rel = if filter.needs_path() {
+                let name = String::from_utf8_lossy(&entry.name);
+                if rel.is_empty() {
+                    name.into_owned()
+                } else {
+                    format!("{rel}/{name}")
+                }
+            } else {
+                String::new()
+            };
             match platform.open_child(&dir, &path, &entry.name) {
-                Ok(child) => walk_dir(platform, child, child_path, entry, progress),
+                Ok(child) => walk_dir(ctx, child, child_path, child_rel, entry),
                 Err(err) => {
                     tracing::debug!(path = %child_path.display(), %err, "cannot open directory");
                     progress.add_error();
@@ -230,12 +258,50 @@ mod tests {
         fs.insert(PathBuf::from("/a"), vec![("b", true, 0), ("g", false, 7)]);
         fs.insert(PathBuf::from("/a/b"), vec![("h", false, 11)]);
         let progress = ScanProgress::new();
-        let tree = walk(&Fake(fs), Path::new("/"), dir_info(0, 0), &progress).expect("walk");
+        let tree = walk(
+            &Fake(fs),
+            Path::new("/"),
+            dir_info(0, 0),
+            &Matcher::default(),
+            &progress,
+        )
+        .expect("walk");
         assert_eq!(tree.node(tree.root()).size, 23);
         assert_eq!(tree.node(tree.root()).files, 3);
         assert_eq!(progress.snapshot().errors, 1);
         let locked = tree.find(Path::new("/locked")).expect("locked node");
         assert!(tree.node(locked).flags.contains(Flags::ERROR));
+    }
+
+    #[test]
+    fn filter_leaves_out_excluded_entries() {
+        let mut fs = HashMap::new();
+        fs.insert(
+            PathBuf::from("/"),
+            vec![("keep", true, 0), ("skip", true, 0), ("a.tmp", false, 5)],
+        );
+        fs.insert(
+            PathBuf::from("/keep"),
+            vec![("f", false, 7), ("skip", false, 3)],
+        );
+        fs.insert(PathBuf::from("/skip"), vec![("big", false, 100)]);
+        let filter = crate::ScanFilter {
+            exclude: vec!["/skip".into(), "*.tmp".into()],
+            include_files: Vec::new(),
+        }
+        .compile();
+        let progress = ScanProgress::new();
+        let tree = walk(
+            &Fake(fs),
+            Path::new("/"),
+            dir_info(0, 0),
+            &filter,
+            &progress,
+        )
+        .expect("walk");
+        assert_eq!(tree.node(tree.root()).size, 10);
+        assert!(tree.find(Path::new("/skip")).is_none());
+        assert!(tree.find(Path::new("/keep/skip")).is_some());
     }
 
     #[test]
@@ -246,6 +312,7 @@ mod tests {
             &Fake(HashMap::new()),
             Path::new("/"),
             dir_info(0, 0),
+            &Matcher::default(),
             &progress,
         )
         .expect("walk");

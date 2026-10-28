@@ -7,6 +7,7 @@ mod backend;
 pub mod cleanup;
 pub mod duplicates;
 pub mod export;
+mod filter;
 pub mod ntfs;
 mod progress;
 pub mod snapshot;
@@ -19,6 +20,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 pub use backend::Backend;
+pub use filter::ScanFilter;
 pub use progress::{ProgressSnapshot, ScanProgress};
 pub use tree::{EntryInfo, Flags, Kind, Metric, Node, NodeId, Tree, TreeBuilder, ratio};
 
@@ -34,6 +36,8 @@ pub struct ScanOptions {
     pub prefer_mft: bool,
     /// Worker threads; 0 picks a default suited to the storage.
     pub threads: usize,
+    /// Entries to leave out of the scan.
+    pub filter: ScanFilter,
 }
 
 impl Default for ScanOptions {
@@ -42,6 +46,7 @@ impl Default for ScanOptions {
             cross_filesystems: false,
             prefer_mft: true,
             threads: 0,
+            filter: ScanFilter::default(),
         }
     }
 }

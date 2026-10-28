@@ -20,6 +20,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 
 use super::{extended_path, open};
 use crate::ScanError;
+use crate::filter::Matcher;
 use crate::ntfs::filetime_to_unix;
 use crate::progress::ScanProgress;
 use crate::tree::{EntryInfo, Flags, Kind, Tree};
@@ -36,7 +37,11 @@ pub(super) struct DirHandle {
     path: PathBuf,
 }
 
-pub(super) fn scan(root: &Path, progress: &ScanProgress) -> Result<Tree, ScanError> {
+pub(super) fn scan(
+    root: &Path,
+    filter: &Matcher,
+    progress: &ScanProgress,
+) -> Result<Tree, ScanError> {
     let meta = std::fs::metadata(root).map_err(|e| ScanError::io(root, e))?;
     if !meta.is_dir() {
         return Err(ScanError::NotADirectory(root.to_path_buf()));
@@ -46,8 +51,14 @@ pub(super) fn scan(root: &Path, progress: &ScanProgress) -> Result<Tree, ScanErr
         .ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map_or(0, |d| d.as_secs() as i64);
-    walk::walk(&DirInfo, root, walk::dir_info(modified, 0), progress)
-        .map_err(|e| ScanError::io(root, e))
+    walk::walk(
+        &DirInfo,
+        root,
+        walk::dir_info(modified, 0),
+        filter,
+        progress,
+    )
+    .map_err(|e| ScanError::io(root, e))
 }
 
 impl Platform for DirInfo {
