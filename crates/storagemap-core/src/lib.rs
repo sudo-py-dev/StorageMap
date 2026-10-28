@@ -9,6 +9,7 @@ pub mod duplicates;
 pub mod export;
 mod filter;
 pub mod ntfs;
+pub mod operations;
 mod progress;
 pub mod search;
 pub mod snapshot;
