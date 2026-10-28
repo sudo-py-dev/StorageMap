@@ -7,6 +7,9 @@
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
+/// Owner id when the engine cannot tell who owns an entry.
+pub const NO_OWNER: u32 = u32::MAX;
+
 /// Index of a node inside a [`Tree`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct NodeId(pub u32);
@@ -98,6 +101,8 @@ pub struct Node {
     pub accessed: i64,
     /// Creation, Unix seconds (0 if unknown); the entry's own, not aggregated.
     pub created: i64,
+    /// Owner id (the user id on Unix), or [`NO_OWNER`].
+    pub owner: u32,
     /// Logical size; aggregated for directories.
     pub size: u64,
     /// Allocated bytes; aggregated for directories (includes the directory's
@@ -294,6 +299,7 @@ pub struct EntryInfo {
     pub modified: i64,
     pub accessed: i64,
     pub created: i64,
+    pub owner: u32,
     pub size: u64,
     pub allocated: u64,
 }
@@ -349,6 +355,7 @@ impl TreeBuilder {
             modified: info.modified,
             accessed: info.accessed,
             created: info.created,
+            owner: info.owner,
             size: info.size,
             allocated: info.allocated,
             files: u64::from(info.kind != Kind::Dir),
@@ -427,6 +434,7 @@ mod tests {
             modified: 10,
             accessed: 0,
             created: 0,
+            owner: NO_OWNER,
             size,
             allocated: size,
         }
@@ -439,6 +447,7 @@ mod tests {
             modified: 0,
             accessed: 0,
             created: 0,
+            owner: NO_OWNER,
             size: 0,
             allocated: 0,
         }

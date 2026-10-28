@@ -18,7 +18,7 @@ mod treemap;
 use std::collections::HashSet;
 use std::time::Duration;
 
-use storagemap_core::analysis::{AgeStat, ExtensionStat};
+use storagemap_core::analysis::{AgeStat, ExtensionStat, OwnerStat};
 use storagemap_core::snapshot::{Comparison, SnapshotInfo};
 use storagemap_core::{Backend, Metric, Node, NodeId, ScanResult, Tree};
 
@@ -79,6 +79,17 @@ impl Env<'_> {
             Metric::Allocated => self.size(node.allocated),
             Metric::FileCount => fmt::count(node.files),
         }
+    }
+
+    /// Logical-order name of an owner id.
+    pub fn owner_name(&self, owner: u32) -> String {
+        if owner == storagemap_core::NO_OWNER {
+            return self.i18n.logical("owner-unknown");
+        }
+        crate::platform::user_name(owner).unwrap_or_else(|| {
+            self.i18n
+                .la("owner-id", &[("id", owner.to_string().into())])
+        })
     }
 
     pub fn metric_value_text(&self, value: u64) -> String {
@@ -219,6 +230,11 @@ pub struct ScanView {
     pub(super) expansion_version: u64,
     pub(super) top_files: Cached<AnalysisKey, Vec<NodeId>>,
     pub(super) types: Cached<AnalysisKey, Vec<ExtensionStat>>,
+    pub(super) owners: Cached<AnalysisKey, Vec<OwnerStat>>,
+    /// The Types tab lists owners instead of file types.
+    pub(super) by_owner: bool,
+    /// Owners anywhere in the scan, for the folder tree's filter.
+    pub(super) all_owners: Cached<u64, Vec<u32>>,
     pub(super) ages: Cached<(NodeId, u64), [AgeStat; 7]>,
     pub(super) search: Cached<(NodeId, String, u64), Vec<NodeId>>,
     pub(super) details_rows: Cached<(NodeId, details::Sort, u64), Vec<NodeId>>,
@@ -264,6 +280,9 @@ impl ScanView {
             expansion_version: 0,
             top_files: Cached::default(),
             types: Cached::default(),
+            owners: Cached::default(),
+            by_owner: false,
+            all_owners: Cached::default(),
             ages: Cached::default(),
             search: Cached::default(),
             details_rows: Cached::default(),

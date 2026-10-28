@@ -459,6 +459,7 @@ mod tests {
             modified: 0,
             accessed: 0,
             created: 0,
+            owner: crate::NO_OWNER,
             size,
             allocated: size,
         }

@@ -161,6 +161,7 @@ fn entry(info: &FILE_ID_BOTH_DIR_INFO, name: &[u16]) -> RawEntry {
             modified: filetime_to_unix(info.LastWriteTime.max(0) as u64),
             accessed: filetime_to_unix(info.LastAccessTime.max(0) as u64),
             created: filetime_to_unix(info.CreationTime.max(0) as u64),
+            owner: crate::NO_OWNER,
             size: if kind == Kind::File {
                 info.EndOfFile.max(0) as u64
             } else {

@@ -3,7 +3,7 @@
 use std::time::{Duration, Instant};
 
 use egui::{Response, Ui, vec2};
-use storagemap_core::analysis::{self, AgeBucket, AgeStat, ExtensionStat};
+use storagemap_core::analysis::{self, AgeBucket, AgeStat, ExtensionStat, OwnerStat};
 use storagemap_core::{Metric, NodeId, Tree, ratio};
 
 use super::table::{self, Col, TableSource};
@@ -137,9 +137,71 @@ impl TableSource for TypeList<'_> {
     fn row_response(&mut self, _: &mut Env<'_>, _: usize, _: &Response) {}
 }
 
+struct OwnerList<'a> {
+    stats: &'a [OwnerStat],
+    total: u64,
+    metric: Metric,
+}
+
+const OWNER_COLUMNS: [Col; 4] = [
+    Col::fixed("col-owner", 200.0, 1),
+    Col::fixed("col-size", 92.0, 2),
+    Col::flex("col-share"),
+    Col::fixed("col-files", 80.0, 3),
+];
+
+impl TableSource for OwnerList<'_> {
+    fn rows(&self) -> usize {
+        self.stats.len()
+    }
+
+    fn is_selected(&self, _: usize) -> bool {
+        false
+    }
+
+    fn cell(&mut self, ui: &mut Ui, env: &mut Env<'_>, row: usize, col: usize) {
+        let s = &self.stats[row];
+        match col {
+            0 => table::text(ui, env, &env.owner_name(s.owner), false),
+            1 => table::text(ui, env, &env.metric_value_text(s.metric(self.metric)), true),
+            2 => table::share(ui, env, ratio(s.metric(self.metric), self.total)),
+            _ => table::text(ui, env, &fmt::count(s.files), true),
+        }
+    }
+
+    fn row_response(&mut self, _: &mut Env<'_>, _: usize, _: &Response) {}
+}
+
+/// File types, or owners when the user switched to them.
 pub fn types(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     let metric = env.settings.metric;
     let (tree, focus) = (&scan.tree, scan.focus);
+    let owners = scan.owners.get((focus, metric, scan.generation), || {
+        analysis::owners(tree, focus, metric)
+    });
+    // Only worth offering when the engine knows who owns what.
+    if owners.iter().any(|o| o.owner != storagemap_core::NO_OWNER) {
+        crate::widgets::row(ui, env.i18n.dir(), |ui| {
+            ui.selectable_value(&mut scan.by_owner, false, env.t("types-by-type"));
+            ui.selectable_value(&mut scan.by_owner, true, env.t("types-by-owner"));
+        });
+        ui.add_space(6.0);
+        if scan.by_owner {
+            let total = owners.iter().map(|s| s.metric(metric)).sum();
+            table::show(
+                ui,
+                env,
+                "owners",
+                &OWNER_COLUMNS,
+                &mut OwnerList {
+                    stats: owners,
+                    total,
+                    metric,
+                },
+            );
+            return;
+        }
+    }
     let stats = scan.types.get((focus, metric, scan.generation), || {
         analysis::extensions(tree, focus, metric)
     });

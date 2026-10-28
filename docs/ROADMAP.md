@@ -29,10 +29,12 @@ shared foundations the later items build on.
   still shows results only at the end.)*
 - Several scans open at once, as tabs. *(Done.)*
 - Last-access date, creation date and attributes in the details table.
-  *(Dates done; attributes to come.)*
+  *(Done.)*
 - Pie and bar charts of the selected folder. *(Done: Chart tab.)*
-- Owner statistics (who uses the space), per folder.
-- Filter the folder tree by file type, owner or age. *(Type and age done.)*
+- Owner statistics (who uses the space), per folder. *(Done on Linux and
+  other Unix systems: File types → By owner. Windows needs the owner read from
+  the NTFS security descriptors, still to do.)*
+- Filter the folder tree by file type, owner or age. *(Done; owners as above.)*
 - Bold or highlight unusually large items. *(Done.)*
 - Choose and reorder columns per table, and per export.
 

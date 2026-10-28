@@ -320,6 +320,7 @@ pub(crate) fn dir_info(modified: i64, allocated: u64) -> EntryInfo {
         modified,
         accessed: 0,
         created: 0,
+        owner: crate::NO_OWNER,
         size: 0,
         allocated,
     }
@@ -365,6 +366,7 @@ mod tests {
                     modified: 1,
                     accessed: 0,
                     created: 0,
+                    owner: crate::NO_OWNER,
                     size,
                     allocated: size,
                 };

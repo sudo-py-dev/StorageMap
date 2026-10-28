@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 pub use backend::Backend;
 pub use filter::ScanFilter;
 pub use progress::{ProgressSnapshot, ScanProgress};
-pub use tree::{EntryInfo, Flags, Kind, Metric, Node, NodeId, Tree, TreeBuilder, ratio};
+pub use tree::{EntryInfo, Flags, Kind, Metric, NO_OWNER, Node, NodeId, Tree, TreeBuilder, ratio};
 
 /// Stack per scanner thread; walks recurse once per directory level.
 const SCAN_THREAD_STACK: usize = 32 * 1024 * 1024;

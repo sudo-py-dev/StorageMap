@@ -64,6 +64,7 @@ impl Platform for Portable {
                 modified: modified(&meta),
                 accessed: unix_secs(meta.accessed()),
                 created: unix_secs(meta.created()),
+                owner: owner(&meta),
                 size,
                 allocated: size,
             };
@@ -75,6 +76,16 @@ impl Platform for Portable {
         }
         Ok(())
     }
+}
+
+#[cfg(unix)]
+fn owner(meta: &Metadata) -> u32 {
+    std::os::unix::fs::MetadataExt::uid(meta)
+}
+
+#[cfg(not(unix))]
+fn owner(_meta: &Metadata) -> u32 {
+    crate::NO_OWNER
 }
 
 fn modified(meta: &Metadata) -> i64 {

@@ -26,6 +26,7 @@ pub enum TreeFilter {
     All,
     Type(Category),
     Age(AgeBucket),
+    Owner(u32),
 }
 
 impl TreeFilter {
@@ -38,6 +39,7 @@ impl TreeFilter {
             TreeFilter::Age(bucket) => {
                 AgeBucket::of(now.saturating_sub(tree.node(id).modified).max(0)) == bucket
             }
+            TreeFilter::Owner(owner) => tree.node(id).owner == owner,
         }
     }
 
@@ -46,6 +48,7 @@ impl TreeFilter {
             TreeFilter::All => env.t("tree-filter-all"),
             TreeFilter::Type(cat) => env.t(cat.label_id()),
             TreeFilter::Age(bucket) => env.t(super::lists::age_label_id(bucket)),
+            TreeFilter::Owner(owner) => env.i18n.v(&env.owner_name(owner)),
         }
     }
 }
@@ -142,6 +145,14 @@ pub fn rows(scan: &ScanView) -> &[Row] {
 pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     let filter = scan.tree_filter;
     refresh(scan, env.settings.metric);
+    let tree = &scan.tree;
+    let owners = scan.all_owners.get(scan.generation, || {
+        storagemap_core::analysis::owners(tree, tree.root(), Metric::Size)
+            .into_iter()
+            .map(|s| s.owner)
+            .filter(|&o| o != storagemap_core::NO_OWNER)
+            .collect()
+    });
     let rows = &scan.tree_rows.value()[..];
     let values = (filter != TreeFilter::All).then(|| scan.filtered.value().as_slice());
     let tree = &scan.tree;
@@ -161,7 +172,7 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         );
         ui.with_layout(env.i18n.dir().end_row(), |ui| {
             collapse = ui.small_button(env.t("action-collapse-all")).clicked();
-            new_filter = filter_menu(ui, env, filter);
+            new_filter = filter_menu(ui, env, filter, owners);
         });
     });
     // Counts get their own line, elided rather than colliding with the button.
@@ -212,7 +223,12 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
 }
 
 /// A drop-down choosing which files the tree counts; returns a new choice.
-fn filter_menu(ui: &mut Ui, env: &Env<'_>, current: TreeFilter) -> Option<TreeFilter> {
+fn filter_menu(
+    ui: &mut Ui,
+    env: &Env<'_>,
+    current: TreeFilter,
+    owners: &[u32],
+) -> Option<TreeFilter> {
     let mut chosen = None;
     let text = format!("{}  {}", crate::icons::FILTER, current.label(env));
     egui::ComboBox::from_id_salt("tree-filter")
@@ -236,6 +252,14 @@ fn filter_menu(ui: &mut Ui, env: &Env<'_>, current: TreeFilter) -> Option<TreeFi
             ui.label(egui::RichText::new(env.t("tree-filter-modified")).weak());
             for bucket in AgeBucket::ALL {
                 option(ui, TreeFilter::Age(bucket));
+            }
+            // A single owner would not narrow anything down.
+            if owners.len() > 1 {
+                ui.separator();
+                ui.label(egui::RichText::new(env.t("col-owner")).weak());
+                for &owner in owners {
+                    option(ui, TreeFilter::Owner(owner));
+                }
             }
         });
     chosen.filter(|&f| f != current)
@@ -414,6 +438,7 @@ mod tests {
             modified: 0,
             accessed: 0,
             created: 0,
+            owner: storagemap_core::NO_OWNER,
             size: 0,
             allocated: 0,
         };

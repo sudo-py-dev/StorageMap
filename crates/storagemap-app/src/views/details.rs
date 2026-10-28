@@ -41,7 +41,7 @@ impl Default for Sort {
 }
 
 /// Columns in logical order and what each sorts by.
-const COLUMNS: [(Col, Option<SortBy>); 11] = [
+const COLUMNS: [(Col, Option<SortBy>); 12] = [
     (Col::flex("col-name"), Some(SortBy::Name)),
     (Col::fixed("col-size", 82.0, 1), Some(SortBy::Size)),
     (
@@ -56,6 +56,7 @@ const COLUMNS: [(Col, Option<SortBy>); 11] = [
     (Col::fixed("col-accessed", 88.0, 8), Some(SortBy::Accessed)),
     (Col::fixed("col-created", 88.0, 9), Some(SortBy::Created)),
     (Col::fixed("col-attributes", 64.0, 10), None),
+    (Col::fixed("col-owner", 90.0, 11), None),
 ];
 
 /// Attribute letters, in the order shown: read-only, hidden, system,
@@ -159,6 +160,7 @@ impl TableSource for Source<'_> {
             8 => table::text(ui, env, &fmt::date(node.accessed), true),
             9 => table::text(ui, env, &fmt::date(node.created), true),
             10 => table::text(ui, env, &attribute_letters(node.flags), true),
+            11 => table::text(ui, env, &env.owner_name(node.owner), false),
             _ => {
                 let ext = extension_of(self.tree.name_bytes(id));
                 let kind = if node.kind == Kind::File && !ext.is_empty() {
@@ -242,6 +244,7 @@ mod tests {
             modified: 0,
             accessed: 0,
             created: 0,
+            owner: storagemap_core::NO_OWNER,
             size: 0,
             allocated: 0,
         };

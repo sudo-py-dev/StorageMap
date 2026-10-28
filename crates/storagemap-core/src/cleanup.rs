@@ -208,6 +208,7 @@ mod tests {
             modified: NOW,
             accessed: 0,
             created: 0,
+            owner: crate::NO_OWNER,
             size: 0,
             allocated: 0,
         }
@@ -220,6 +221,7 @@ mod tests {
             modified,
             accessed: 0,
             created: 0,
+            owner: crate::NO_OWNER,
             size,
             allocated: size,
         }

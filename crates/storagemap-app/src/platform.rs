@@ -39,6 +39,40 @@ pub fn trash_location(path: &Path) -> TrashLocation {
     }
 }
 
+/// The account name of a Unix user id, from `/etc/passwd` (read once).
+#[cfg(unix)]
+pub fn user_name(uid: u32) -> Option<String> {
+    static NAMES: std::sync::OnceLock<std::collections::HashMap<u32, String>> =
+        std::sync::OnceLock::new();
+    NAMES
+        .get_or_init(|| {
+            std::fs::read_to_string("/etc/passwd")
+                .map(|text| parse_passwd(&text))
+                .unwrap_or_default()
+        })
+        .get(&uid)
+        .cloned()
+}
+
+#[cfg(not(unix))]
+pub fn user_name(_uid: u32) -> Option<String> {
+    None
+}
+
+/// `name:password:uid:...` lines to a uid → name map.
+#[cfg_attr(not(unix), allow(dead_code))]
+fn parse_passwd(text: &str) -> std::collections::HashMap<u32, String> {
+    text.lines()
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|line| {
+            let mut fields = line.split(':');
+            let name = fields.next()?;
+            let uid = fields.nth(1)?.parse().ok()?;
+            Some((uid, name.to_owned()))
+        })
+        .collect()
+}
+
 /// Permanently deletes everything in the trash folder `root` (a path that
 /// `trash_location` reports as `Root`); returns the number of items removed.
 /// The folder itself and its `files`/`info` layout are kept.
@@ -124,6 +158,16 @@ pub fn attach_console() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_passwd() {
+        let names = parse_passwd(
+            "root:x:0:0:root:/root:/bin/bash\n# comment\nbad\nana:x:1000:1000::/home/ana:/bin/sh\n",
+        );
+        assert_eq!(names.get(&0).map(String::as_str), Some("root"));
+        assert_eq!(names.get(&1000).map(String::as_str), Some("ana"));
+        assert_eq!(names.len(), 2);
+    }
 
     #[test]
     fn recognises_trash_folders() {

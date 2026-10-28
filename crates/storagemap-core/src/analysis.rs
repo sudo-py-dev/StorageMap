@@ -71,6 +71,52 @@ pub fn extensions(tree: &Tree, root: NodeId, metric: Metric) -> Vec<ExtensionSta
     stats
 }
 
+/// Totals for one owner.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct OwnerStat {
+    /// Owner id, or [`crate::NO_OWNER`].
+    pub owner: u32,
+    pub size: u64,
+    pub allocated: u64,
+    pub files: u64,
+}
+
+impl OwnerStat {
+    pub fn metric(&self, metric: Metric) -> u64 {
+        match metric {
+            Metric::Size => self.size,
+            Metric::Allocated => self.allocated,
+            Metric::FileCount => self.files,
+        }
+    }
+}
+
+/// File totals per owner below `root`, largest first. Extra hard links are
+/// not counted again, so the totals add up to the folder's.
+pub fn owners(tree: &Tree, root: NodeId, metric: Metric) -> Vec<OwnerStat> {
+    let mut map: HashMap<u32, OwnerStat> = HashMap::new();
+    for id in tree.walk(root) {
+        let node = tree.node(id);
+        if node.kind == Kind::Dir || node.flags.contains(crate::Flags::HARDLINK_DUP) {
+            continue;
+        }
+        let stat = map.entry(node.owner).or_default();
+        stat.size += node.size;
+        stat.allocated += node.allocated;
+        stat.files += 1;
+    }
+    let mut stats: Vec<_> = map
+        .into_iter()
+        .map(|(owner, s)| OwnerStat { owner, ..s })
+        .collect();
+    stats.sort_unstable_by(|a, b| {
+        b.metric(metric)
+            .cmp(&a.metric(metric))
+            .then_with(|| a.owner.cmp(&b.owner))
+    });
+    stats
+}
+
 /// Lower-case extension of a file name; dot-files without another dot have none.
 pub fn extension_of(name: &[u8]) -> String {
     match name.iter().rposition(|&b| b == b'.') {
@@ -175,6 +221,7 @@ mod tests {
             modified,
             accessed: 0,
             created: 0,
+            owner: crate::NO_OWNER,
             size,
             allocated: size,
         }
@@ -199,6 +246,30 @@ mod tests {
             .collect();
         assert_eq!(names, ["movie.mkv", "a.PDF"]);
         assert!(top_files(&t, t.root(), Metric::Size, 0).is_empty());
+    }
+
+    #[test]
+    fn owners_add_up_and_skip_extra_hard_links() {
+        let mut b = TreeBuilder::new(PathBuf::from("/x"), info(Kind::Dir, 0, 0));
+        let owned = |owner, size| EntryInfo {
+            owner,
+            ..info(Kind::File, size, 0)
+        };
+        b.push(NodeId::ROOT, b"a", owned(1000, 30));
+        b.push(NodeId::ROOT, b"b", owned(0, 50));
+        b.push(NodeId::ROOT, b"c", owned(1000, 40));
+        let mut link = owned(1000, 40);
+        link.flags.insert(Flags::HARDLINK_DUP);
+        b.push(NodeId::ROOT, b"c-link", link);
+        let t = b.finish();
+        let stats = owners(&t, t.root(), Metric::Size);
+        assert_eq!(
+            stats
+                .iter()
+                .map(|s| (s.owner, s.size, s.files))
+                .collect::<Vec<_>>(),
+            [(1000, 70, 2), (0, 50, 1)]
+        );
     }
 
     #[test]

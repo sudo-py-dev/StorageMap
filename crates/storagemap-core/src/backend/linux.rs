@@ -30,7 +30,8 @@ const STATX_MASK: StatxFlags = StatxFlags::TYPE
     .union(StatxFlags::MTIME)
     .union(StatxFlags::ATIME)
     .union(StatxFlags::BTIME)
-    .union(StatxFlags::MODE);
+    .union(StatxFlags::MODE)
+    .union(StatxFlags::UID);
 const STAT_FLAGS: AtFlags = AtFlags::SYMLINK_NOFOLLOW.union(AtFlags::STATX_DONT_SYNC);
 const DIR_FLAGS: OFlags = OFlags::RDONLY
     .union(OFlags::DIRECTORY)
@@ -111,6 +112,7 @@ impl Platform for Linux {
                         modified: 0,
                         accessed: 0,
                         created: 0,
+                        owner: crate::NO_OWNER,
                         size: 0,
                         allocated: 0,
                     },
@@ -164,6 +166,7 @@ impl Linux {
                 } else {
                     0
                 },
+                owner: st.stx_uid,
                 size: if kind == Kind::Dir { 0 } else { st.stx_size },
                 allocated: st.stx_blocks * BLOCK_UNIT,
             },

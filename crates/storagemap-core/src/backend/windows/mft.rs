@@ -381,6 +381,7 @@ fn build(root: &Path, table: &Table, children: &Children, start: u32, filter: &M
             modified: m.modified,
             accessed: m.accessed,
             created: m.created,
+            owner: crate::NO_OWNER,
             size: if m.is_dir { 0 } else { m.size },
             allocated: m.allocated,
         }

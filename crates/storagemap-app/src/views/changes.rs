@@ -263,6 +263,7 @@ mod tests {
             modified: 0,
             accessed: 0,
             created: 0,
+            owner: storagemap_core::NO_OWNER,
             size,
             allocated: size,
         }
