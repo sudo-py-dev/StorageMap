@@ -27,10 +27,11 @@ shared foundations the later items build on.
 - Browse results while a scan is still running (live, partial tree).
 - Several scans open at once, as tabs.
 - Last-access date, creation date and attributes in the details table.
-- Pie and bar charts of the selected folder next to the treemap.
+  *(Dates done; attributes to come.)*
+- Pie and bar charts of the selected folder. *(Done: Chart tab.)*
 - Owner statistics (who uses the space), per folder.
-- Filter the folder tree by file type, owner or age.
-- Bold or highlight unusually large items.
+- Filter the folder tree by file type, owner or age. *(Type and age done.)*
+- Bold or highlight unusually large items. *(Done.)*
 - Choose and reorder columns per table, and per export.
 
 ## Phase 2 — Search
