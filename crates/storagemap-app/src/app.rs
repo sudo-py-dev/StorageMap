@@ -13,6 +13,7 @@ use crate::i18n::{I18n, Lang};
 use crate::platform;
 use crate::scan_job::{PROGRESS_REFRESH, Poll, ScanJob};
 use crate::settings::{STORAGE_KEY, Settings};
+use crate::tabs::Tabs;
 use crate::views::{self, ScanView, Tab};
 
 const TOAST_TIME: Duration = Duration::from_secs(4);
@@ -33,6 +34,9 @@ const CLIPBOARD_DEPTH: usize = 1;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     StartScan(PathBuf),
+    /// Shows the scan tab at this position.
+    SwitchTab(usize),
+    CloseTab(usize),
     PickFolder,
     Rescan,
     Stop,
@@ -106,7 +110,12 @@ pub struct App {
     pub volumes: Vec<volumes::Volume>,
     volumes_at: Instant,
     pub job: Option<ScanJob>,
+    /// The scan tab being shown, if any.
     pub scan: Option<ScanView>,
+    /// The other open scan tabs, in tab order without the shown one.
+    pub parked: Vec<ScanView>,
+    /// Position of `scan` among all tabs.
+    pub active_tab: usize,
     pub toast: Option<Toast>,
     pub confirm_trash: Option<NodeId>,
     /// A trash folder the user may empty, waiting for confirmation.
@@ -150,6 +159,8 @@ impl App {
             volumes_at: Instant::now(),
             job: None,
             scan: None,
+            parked: Vec::new(),
+            active_tab: 0,
             toast: None,
             confirm_trash: None,
             confirm_empty: None,
@@ -199,7 +210,12 @@ impl App {
     fn poll_job(&mut self, ctx: &egui::Context) {
         let Some(job) = &self.job else { return };
         match job.poll() {
-            Poll::Running => ctx.request_repaint_after(PROGRESS_REFRESH),
+            Poll::Running => {
+                if let Some(tree) = job.progress.take_partial() {
+                    self.show_partial(tree, job.started.elapsed());
+                }
+                ctx.request_repaint_after(PROGRESS_REFRESH);
+            }
             Poll::Done(result) => {
                 let root = job.root.clone();
                 self.job = None;
@@ -210,7 +226,13 @@ impl App {
                             "{} — StorageMap",
                             root.display()
                         )));
-                        let mut view = ScanView::new(result);
+                        let mut view = match self.take_live_tab() {
+                            Some(mut live) => {
+                                live.finish(result);
+                                live
+                            }
+                            None => ScanView::new(result),
+                        };
                         self.attach_history(&mut view);
                         if self.settings.auto_snapshot && !view.cancelled {
                             self.writers.retain(|w| !w.is_finished());
@@ -227,15 +249,85 @@ impl App {
                                 }
                             }
                         }
-                        self.scan = Some(view);
+                        self.open_tab(view);
                     }
                     Err(error) => {
+                        // Keep whatever the live view had found.
+                        if let Some(mut live) = self.take_live_tab() {
+                            live.scanning = false;
+                            live.cancelled = true;
+                            self.open_tab(live);
+                        }
                         let text = self.i18n.ta("scan-failed", &[("error", error.into())]);
                         self.notify(text, true);
                     }
                 }
             }
         }
+    }
+
+    /// Shows a partial tree from the running scan: in its own tab, opened
+    /// on the first one and updated in place after that.
+    fn show_partial(&mut self, tree: storagemap_core::Tree, elapsed: std::time::Duration) {
+        if let Some(view) = self.tabs_mut().find(|v| v.scanning) {
+            view.replace_tree(tree);
+            view.elapsed = elapsed;
+            return;
+        }
+        let mut view = ScanView::new(storagemap_core::ScanResult {
+            tree,
+            backend: storagemap_core::Backend::Portable,
+            elapsed,
+            errors: 0,
+            cancelled: false,
+        });
+        view.scanning = true;
+        self.open_tab(view);
+    }
+
+    /// Every open scan tab, shown or not.
+    fn tabs_mut(&mut self) -> impl Iterator<Item = &mut ScanView> {
+        self.scan.iter_mut().chain(self.parked.iter_mut())
+    }
+
+    fn tabs(&mut self) -> Tabs<'_, ScanView> {
+        Tabs {
+            shown: &mut self.scan,
+            parked: &mut self.parked,
+            active: &mut self.active_tab,
+        }
+    }
+
+    /// Number of open scan tabs.
+    pub fn tab_count(&self) -> usize {
+        self.parked.len() + usize::from(self.scan.is_some())
+    }
+
+    /// The tab at position `index`, and whether it is the one shown.
+    pub fn tab(&self, index: usize) -> Option<(&ScanView, bool)> {
+        crate::tabs::get(self.scan.as_ref(), &self.parked, self.active_tab, index)
+    }
+
+    fn close_tab(&mut self, index: usize) {
+        if let Some((view, _)) = self.tab(index)
+            && view.scanning
+            && let Some(job) = &self.job
+        {
+            job.cancel();
+        }
+        self.tabs().close(index);
+    }
+
+    /// Shows `view` as a tab: replacing the tab of the same folder, or
+    /// added after the others.
+    fn open_tab(&mut self, view: ScanView) {
+        self.tabs()
+            .open(view, |a, b| a.tree.root_path() == b.tree.root_path());
+    }
+
+    /// Removes and returns the tab showing the running scan, if any.
+    fn take_live_tab(&mut self) -> Option<ScanView> {
+        self.tabs().take(|v| v.scanning)
     }
 
     fn handle_dropped_folders(&mut self, ctx: &egui::Context) {
@@ -273,11 +365,12 @@ impl App {
                 }
             }
             Action::Home => {
-                if self.job.is_none() {
-                    self.scan = None;
-                    self.volumes = volumes::list();
-                }
+                // Open tabs stay; the start screen picks the next folder.
+                self.tabs().park();
+                self.volumes = volumes::list();
             }
+            Action::SwitchTab(index) => self.tabs().switch(index),
+            Action::CloseTab(index) => self.close_tab(index),
             Action::Focus(id) => self.with_scan(|s| s.set_focus(id)),
             Action::Select(id) => self.with_scan(|s| s.select(id)),
             Action::Up => self.with_scan(ScanView::up),
@@ -291,6 +384,10 @@ impl App {
             }
             Action::AskTrash(id) => {
                 let Some(path) = self.path_of(id) else { return };
+                if self.scan.as_ref().is_some_and(|s| s.scanning) {
+                    self.notify(self.i18n.t("wait-for-scan"), true);
+                    return;
+                }
                 match platform::trash_location(&path) {
                     platform::TrashLocation::Root => self.confirm_empty = Some(id),
                     platform::TrashLocation::Inside => {
@@ -740,6 +837,7 @@ impl eframe::App for App {
 
         views::chrome::top_bar(self, ui);
         views::chrome::update_banner(self, ui);
+        views::chrome::scan_tabs(self, ui);
         views::chrome::status_bar(self, ui);
         views::chrome::body(self, ui);
         views::chrome::modals(self, &ctx);
@@ -754,13 +852,18 @@ impl eframe::App for App {
             ctx.request_repaint_after(Duration::from_millis(16));
         }
         if let Some(shot) = &mut self.devshot {
-            // Idle: no scan running, and either results or the start screen shown.
-            let idle = self.job.is_none()
-                && self.actions.is_empty()
-                && self
-                    .scan
-                    .as_ref()
-                    .is_none_or(|s| !views::duplicates::is_running(s));
+            // Idle: no scan running, and either results or the start screen
+            // shown; or, for a live capture, the running scan's view shown.
+            let idle = if shot.live {
+                self.scan.as_ref().is_some_and(|s| s.scanning)
+            } else {
+                self.job.is_none()
+                    && self.actions.is_empty()
+                    && self
+                        .scan
+                        .as_ref()
+                        .is_none_or(|s| !views::duplicates::is_running(s))
+            };
             shot.frame(&ctx, idle);
         }
     }

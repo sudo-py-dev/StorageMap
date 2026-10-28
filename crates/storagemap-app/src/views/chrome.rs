@@ -480,6 +480,92 @@ pub fn update_banner(app: &mut App, ui: &mut Ui) {
     });
 }
 
+/// One tab per open scan, with a button to open another.
+pub fn scan_tabs(app: &mut App, ui: &mut Ui) {
+    if app.tab_count() == 0 {
+        return;
+    }
+    let frame = bar_frame(ui).inner_margin(Margin::symmetric(8, 4));
+    Panel::top("scan-tabs").frame(frame).show(ui, |ui| {
+        let dir = app.i18n.dir();
+        let mut action = None;
+        egui::ScrollArea::horizontal()
+            .id_salt("scan-tabs-scroll")
+            .show(ui, |ui| {
+                row(ui, dir, |ui| {
+                    for index in 0..app.tab_count() {
+                        let Some((view, active)) = app.tab(index) else {
+                            continue;
+                        };
+                        if let Some(a) = scan_tab(ui, &app.i18n, view, active, index) {
+                            action = Some(a);
+                        }
+                    }
+                    let new_tab = ui
+                        .add(egui::Button::new(crate::icons::PLUS).frame(false))
+                        .on_hover_text(app.i18n.t("tab-new"));
+                    if new_tab.clicked() {
+                        action = Some(Action::Home);
+                    }
+                });
+            });
+        app.actions.extend(action);
+    });
+}
+
+/// A scan tab: the folder's name, a spinner while scanning, and a close button.
+fn scan_tab(
+    ui: &mut Ui,
+    i: &crate::i18n::I18n,
+    view: &ScanView,
+    active: bool,
+    index: usize,
+) -> Option<Action> {
+    let root = view.tree.root_path();
+    let name = root
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| root.to_string_lossy().into_owned());
+    let visuals = ui.visuals();
+    let fill = if active {
+        visuals.widgets.active.weak_bg_fill
+    } else {
+        visuals.widgets.inactive.weak_bg_fill
+    };
+    let mut action = None;
+    Frame::new()
+        .fill(fill)
+        .corner_radius(CornerRadius::same(theme::RADIUS))
+        .inner_margin(Margin::symmetric(8, 3))
+        .show(ui, |ui| {
+            row(ui, i.dir(), |ui| {
+                if view.scanning {
+                    ui.add(egui::Spinner::new().size(12.0));
+                }
+                let text = RichText::new(i.v(&name));
+                let label = egui::Label::new(if active { text.strong() } else { text })
+                    .truncate()
+                    .sense(Sense::click());
+                let response = ui
+                    .add_sized(vec2(ui.available_width().min(180.0), 18.0), label)
+                    .on_hover_text(i.v(&root.to_string_lossy()));
+                if response.clicked() {
+                    action = Some(Action::SwitchTab(index));
+                }
+                if response.middle_clicked() {
+                    action = Some(Action::CloseTab(index));
+                }
+                let close = ui
+                    .add(egui::Button::new(RichText::new(crate::icons::CLOSE).small()).frame(false))
+                    .on_hover_text(i.t("tab-close"));
+                if close.clicked() {
+                    action = Some(Action::CloseTab(index));
+                }
+            });
+        });
+    action
+}
+
 pub fn status_bar(app: &mut App, ui: &mut Ui) {
     let frame = bar_frame(ui).inner_margin(Margin::symmetric(10, 3));
     Panel::bottom("status").frame(frame).show(ui, |ui| {
@@ -489,6 +575,25 @@ pub fn status_bar(app: &mut App, ui: &mut Ui) {
                 return;
             };
             let i = &app.i18n;
+            if scan.scanning
+                && let Some(job) = &app.job
+            {
+                let snap = job.progress.snapshot();
+                ui.add(egui::Spinner::new().size(12.0));
+                let size = fmt::size(snap.bytes, app.settings.unit, 1, |id| i.logical(id));
+                let line = i.ta(
+                    "scan-progress",
+                    &[
+                        ("files", fmt::count(snap.files).into()),
+                        ("dirs", fmt::count(snap.dirs).into()),
+                        ("size", size.into()),
+                    ],
+                );
+                ui.label(RichText::new(line).small());
+                ui.separator();
+                ui.label(RichText::new(i.t("scan-live-hint")).small().weak());
+                return;
+            }
             ui.label(
                 RichText::new(format!(
                     "{} {}",

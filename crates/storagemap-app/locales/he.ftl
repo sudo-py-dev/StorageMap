@@ -99,6 +99,10 @@ volume-unknown = אמצעי אחסון
 
 ## Scanning
 scan-progress = סורק… { $files } קבצים ב־{ $dirs } תיקיות · { $size }
+tab-new = סריקת תיקייה נוספת
+tab-close = סגירה
+wait-for-scan = יש להמתין לסיום הסריקה
+scan-live-hint = אפשר כבר לעיין בתיקיות שהסריקה שלהן הסתיימה
 scan-done = { $items } פריטים ב־{ $seconds } שניות
 scan-cancelled = הסריקה נעצרה – מוצגות תוצאות חלקיות
 scan-errors =

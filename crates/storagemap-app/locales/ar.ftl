@@ -103,6 +103,10 @@ volume-unknown = وحدة تخزين
 
 ## Scanning
 scan-progress = جارٍ الفحص… { $files } ملف في { $dirs } مجلد · { $size }
+tab-new = فحص مجلد آخر
+tab-close = إغلاق
+wait-for-scan = انتظر انتهاء الفحص أولًا
+scan-live-hint = يمكنك الآن تصفّح المجلدات التي انتهى فحصها
 scan-done = { $items } عنصر في { $seconds } ث
 scan-cancelled = تم إيقاف الفحص – تُعرض نتائج جزئية
 scan-errors =

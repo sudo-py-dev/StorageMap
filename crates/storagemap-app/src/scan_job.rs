@@ -25,6 +25,8 @@ pub enum Poll {
 impl ScanJob {
     pub fn start(root: PathBuf, opts: ScanOptions, ctx: egui::Context) -> std::io::Result<ScanJob> {
         let progress = Arc::new(ScanProgress::new());
+        // Lets the UI show results while the scan runs.
+        progress.enable_live();
         let (tx, rx) = mpsc::channel();
         let (thread_root, thread_progress) = (root.clone(), Arc::clone(&progress));
         std::thread::Builder::new()

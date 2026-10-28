@@ -194,7 +194,7 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
             let (rect, _) = ui
                 .allocate_exact_size(egui::vec2(ui.available_width(), ROW_HEIGHT), Sense::hover());
             let selected = scan.selected == Some(row.id);
-            if let Some(id) = paint_row(ui, env, tree, values, row, rect, selected) {
+            if let Some(id) = paint_row(ui, env, tree, values, scan.scanning, row, rect, selected) {
                 toggle = Some(id);
             }
         }
@@ -276,11 +276,13 @@ fn disclosure_triangle(
 }
 
 /// Paints one row and handles its input; returns a folder to toggle.
+#[allow(clippy::too_many_arguments)]
 fn paint_row(
     ui: &mut Ui,
     env: &mut Env<'_>,
     tree: &Tree,
     values: Option<&[u64]>,
+    scanning: bool,
     row: &Row,
     rect: Rect,
     selected: bool,
@@ -344,9 +346,13 @@ fn paint_row(
         &painter,
         env.i18n,
         value_rect,
-        &match values {
-            Some(v) => env.metric_value_text(v[row.id.index()]),
-            None => env.metric_text(node),
+        &if scanning && node.flags.contains(Flags::INCOMPLETE) {
+            "…".to_owned()
+        } else {
+            match values {
+                Some(v) => env.metric_value_text(v[row.id.index()]),
+                None => env.metric_text(node),
+            }
         },
         font.clone(),
         weak,

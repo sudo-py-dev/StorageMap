@@ -4,7 +4,8 @@
 //! for the UI to settle, writes the window as `"W H\n"` + raw RGBA bytes and
 //! exits. `STORAGEMAP_SCREENSHOT_TAB` picks the tab (e.g. `details`);
 //! `STORAGEMAP_SCREENSHOT_SETTINGS` opens a settings page (e.g. `updates`),
-//! or `export` for the CSV export options.
+//! or `export` for the CSV export options. `STORAGEMAP_SCREENSHOT_LIVE=1`
+//! captures the live view of a scan still running instead of the result.
 //! Without a PATH it captures the start screen.
 //! Inactive unless the variable is set.
 
@@ -23,6 +24,8 @@ pub struct DevShot {
     pub tab: Option<Tab>,
     /// Settings page to open, from `STORAGEMAP_SCREENSHOT_SETTINGS`.
     pub settings: Option<String>,
+    /// Capture while the scan runs, once its live view is shown.
+    pub live: bool,
     settled: u32,
     requested: bool,
 }
@@ -41,6 +44,7 @@ impl DevShot {
             path,
             tab,
             settings: std::env::var("STORAGEMAP_SCREENSHOT_SETTINGS").ok(),
+            live: std::env::var_os("STORAGEMAP_SCREENSHOT_LIVE").is_some(),
             settled: 0,
             requested: false,
         })

@@ -190,6 +190,9 @@ pub struct ScanView {
     pub elapsed: Duration,
     pub errors: u64,
     pub cancelled: bool,
+    /// The tree is a partial one from a scan still running; it is replaced
+    /// as the scan progresses.
+    pub scanning: bool,
     /// Folder shown by the central views.
     pub focus: NodeId,
     pub selected: Option<NodeId>,
@@ -239,6 +242,7 @@ impl ScanView {
             elapsed: result.elapsed,
             errors: result.errors,
             cancelled: result.cancelled,
+            scanning: false,
             focus: root,
             selected: Some(root),
             tab: Tab::default(),
@@ -271,6 +275,37 @@ impl ScanView {
             cleanup: Cached::default(),
             cleanup_expanded: HashSet::new(),
         }
+    }
+
+    /// Swaps in a newer tree of the same folder (a fresher partial tree, or
+    /// the finished one), keeping focus, selection and open folders by path.
+    pub fn replace_tree(&mut self, tree: Tree) {
+        let path = |id: NodeId| self.tree.path(id);
+        let focus = path(self.focus);
+        let selected = self.selected.map(path);
+        let expanded: Vec<_> = self.expanded.iter().map(|&id| path(id)).collect();
+        self.tree = tree;
+        let root = self.tree.root();
+        self.focus = self.tree.find(&focus).unwrap_or(root);
+        self.selected = selected.and_then(|p| self.tree.find(&p));
+        self.expanded = expanded.iter().filter_map(|p| self.tree.find(p)).collect();
+        self.expanded.insert(root);
+        self.scroll_tree_to = None;
+        self.context_target = None;
+        self.duplicates = duplicates::State::default();
+        self.treemap.invalidate();
+        self.generation += 1;
+        self.expansion_changed();
+    }
+
+    /// Replaces a live view's partial tree with the finished scan.
+    pub fn finish(&mut self, result: ScanResult) {
+        self.replace_tree(result.tree);
+        self.backend = result.backend;
+        self.elapsed = result.elapsed;
+        self.errors = result.errors;
+        self.cancelled = result.cancelled;
+        self.scanning = false;
     }
 
     /// Shows `id` (a folder; files show their parent) in the central views.

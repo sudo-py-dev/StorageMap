@@ -99,6 +99,10 @@ volume-unknown = Volume
 
 ## Scanning
 scan-progress = Scanning… { $files } files in { $dirs } folders · { $size }
+tab-new = Scan another folder
+tab-close = Close
+wait-for-scan = Wait for the scan to finish first
+scan-live-hint = Finished folders can be browsed now
 scan-done = { $items } items in { $seconds } s
 scan-cancelled = Scan stopped – showing partial results
 scan-errors =

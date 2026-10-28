@@ -25,7 +25,9 @@ shared foundations the later items build on.
 ## Phase 1 — Everyday analysis
 
 - Browse results while a scan is still running (live, partial tree).
-- Several scans open at once, as tabs.
+  *(Done: finished top-level folders can be browsed; the NTFS table reader
+  still shows results only at the end.)*
+- Several scans open at once, as tabs. *(Done.)*
 - Last-access date, creation date and attributes in the details table.
   *(Dates done; attributes to come.)*
 - Pie and bar charts of the selected folder. *(Done: Chart tab.)*

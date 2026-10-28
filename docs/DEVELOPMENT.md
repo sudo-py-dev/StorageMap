@@ -106,6 +106,8 @@ STORAGEMAP_SCREENSHOT=/tmp/shot.rgba STORAGEMAP_SCREENSHOT_TAB=details ./target/
 This scans the folder, writes the window as raw RGBA (prefixed by a `W H`
 line) and exits. `STORAGEMAP_SCREENSHOT_SETTINGS=updates` opens a settings
 page instead, and leaving out the folder captures the start screen.
+`STORAGEMAP_SCREENSHOT_LIVE=1` captures the live view of a scan still
+running instead of the finished result.
 
 ## Releasing
 

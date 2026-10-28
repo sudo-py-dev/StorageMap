@@ -61,6 +61,7 @@ pub const TYPES: &str = "\u{E158}";
 pub const CHART_DONUT: &str = "\u{EAA6}";
 pub const CHART_BARS: &str = "\u{E152}";
 pub const FILTER: &str = "\u{E266}";
+pub const PLUS: &str = "\u{E3D4}";
 pub const AGE: &str = "\u{E19A}";
 pub const CHANGES: &str = "\u{E1A0}";
 pub const DUPLICATES: &str = "\u{E1CA}";

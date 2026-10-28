@@ -14,6 +14,7 @@ mod icons;
 mod platform;
 mod scan_job;
 mod settings;
+mod tabs;
 mod theme;
 mod update;
 mod views;
