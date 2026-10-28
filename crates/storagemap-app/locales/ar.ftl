@@ -74,6 +74,9 @@ tab-search = بحث
 
 ## Columns
 columns-menu = الأعمدة
+column-earlier = نقل إلى الأمام
+column-later = نقل إلى الخلف
+columns-reset = إعادة ضبط الأعمدة
 col-name = الاسم
 col-size = الحجم
 col-allocated = على القرص

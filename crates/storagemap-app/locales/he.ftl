@@ -70,6 +70,9 @@ tab-search = חיפוש
 
 ## Columns
 columns-menu = עמודות
+column-earlier = הזזה קדימה
+column-later = הזזה אחורה
+columns-reset = איפוס עמודות
 col-name = שם
 col-size = גודל
 col-allocated = בדיסק

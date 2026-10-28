@@ -22,7 +22,7 @@ shared foundations the later items build on.
   WebDAV, Azure Blob, SharePoint, disk images, phones), reusing the parallel
   walker, filters and tree: a new place implements `storagemap_core::source::Source`.
 
-## Phase 1 — Everyday analysis
+## Phase 1 — Everyday analysis (done)
 
 - Browse results while a scan is still running (live, partial tree).
   *(Done: finished top-level folders can be browsed; the NTFS table reader
@@ -36,7 +36,8 @@ shared foundations the later items build on.
   the NTFS security descriptors, still to do.)*
 - Filter the folder tree by file type, owner or age. *(Done; owners as above.)*
 - Bold or highlight unusually large items. *(Done.)*
-- Choose and reorder columns per table, and per export.
+- Choose and reorder columns per table, and per export. *(Tables done:
+  right-click a column header. Per-export columns come with Phase 4.)*
 
 ## Phase 2 — Search
 

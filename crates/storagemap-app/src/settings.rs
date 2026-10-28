@@ -83,6 +83,9 @@ pub struct Settings {
     pub scan_filter: ScanFilter,
     /// Columns the user hid, by table id, as column title ids.
     pub hidden_columns: BTreeMap<String, Vec<String>>,
+    /// Column order the user chose, by table id; columns not listed keep
+    /// their default place after the listed ones.
+    pub column_order: BTreeMap<String, Vec<String>>,
 }
 
 impl Default for Settings {
@@ -112,6 +115,7 @@ impl Default for Settings {
             export_readable: true,
             scan_filter: ScanFilter::default(),
             hidden_columns: BTreeMap::new(),
+            column_order: BTreeMap::new(),
         }
     }
 }
@@ -137,6 +141,12 @@ impl Settings {
         if cols.is_empty() {
             self.hidden_columns.remove(table);
         }
+    }
+
+    /// Shows every column of `table` again, in the default order.
+    pub fn reset_columns(&mut self, table: &str) {
+        self.hidden_columns.remove(table);
+        self.column_order.remove(table);
     }
 
     pub fn remember(&mut self, path: PathBuf) {

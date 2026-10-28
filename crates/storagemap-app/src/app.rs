@@ -68,6 +68,9 @@ pub enum Action {
     SetDuplicateMinSize(u64),
     /// Show or hide a column of a table: (table id, column title id).
     ToggleColumn(&'static str, &'static str),
+    /// A table's full column order, as title ids.
+    SetColumnOrder(&'static str, Vec<&'static str>),
+    ResetColumns(&'static str),
     SetChartStyle(crate::views::chart::Style),
     OpenSettings,
     CheckUpdates,
@@ -468,6 +471,11 @@ impl App {
             Action::ClearComparison => self.with_scan(|s| s.comparison = None),
             Action::SetDuplicateMinSize(size) => self.settings.duplicate_min_size = size,
             Action::ToggleColumn(table, column) => self.settings.toggle_column(table, column),
+            Action::SetColumnOrder(table, order) => {
+                let order = order.into_iter().map(str::to_owned).collect();
+                self.settings.column_order.insert(table.to_owned(), order);
+            }
+            Action::ResetColumns(table) => self.settings.reset_columns(table),
             Action::SetChartStyle(style) => self.settings.chart_style = style,
             Action::OpenSettings => self.show_settings = true,
             Action::CheckUpdates => {

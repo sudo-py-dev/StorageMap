@@ -97,11 +97,14 @@ pub fn show(
     let mut order = visible_columns(cols, ui.available_width(), spacing, |c| {
         settings.column_hidden(salt, c.title_id)
     });
+    let ranks = arranged(cols, settings.column_order.get(salt));
+    order.sort_by_key(|&c| ranks.iter().position(|&r| r == c));
     if env.i18n.is_rtl() {
         order.reverse();
     }
     let mut builder = TableBuilder::new(ui)
-        .id_salt(salt)
+        // Widths are remembered by position, so each arrangement keeps its own.
+        .id_salt((salt, &order))
         .striped(true)
         .resizable(true)
         .sense(Sense::click())
@@ -145,14 +148,71 @@ pub fn show(
         });
 }
 
-/// Checkboxes for every column that can be hidden.
+/// Logical column indices in the user's order: the columns `saved` names
+/// first, in that order, then the rest in their default order.
+fn arranged(cols: &[Col], saved: Option<&Vec<String>>) -> Vec<usize> {
+    let mut order: Vec<usize> = saved
+        .into_iter()
+        .flatten()
+        .filter_map(|id| cols.iter().position(|c| c.title_id == id))
+        .collect();
+    order.dedup();
+    for i in 0..cols.len() {
+        if !order.contains(&i) {
+            order.push(i);
+        }
+    }
+    order
+}
+
+/// Every column with a checkbox to show it (the flexible one always shows)
+/// and buttons to move it towards the start or end of the row.
 fn column_menu(ui: &mut Ui, env: &mut Env<'_>, salt: &'static str, cols: &[Col]) {
     ui.label(RichText::new(env.t("columns-menu")).weak());
-    for col in cols.iter().filter(|c| c.width.is_some()) {
-        let mut shown = !env.settings.column_hidden(salt, col.title_id);
-        if ui.checkbox(&mut shown, env.t(col.title_id)).changed() {
-            env.push(Action::ToggleColumn(salt, col.title_id));
-        }
+    let order = arranged(cols, env.settings.column_order.get(salt));
+    let dir = env.i18n.dir();
+    let (earlier, later) = if env.i18n.is_rtl() {
+        (crate::icons::CARET_RIGHT, crate::icons::CARET_LEFT)
+    } else {
+        (crate::icons::CARET_LEFT, crate::icons::CARET_RIGHT)
+    };
+    for (pos, &c) in order.iter().enumerate() {
+        let col = cols[c];
+        crate::widgets::row(ui, dir, |ui| {
+            let mut moved = None;
+            let button = |ui: &mut Ui, icon: &str, enabled: bool, tip: String| {
+                ui.add_enabled(enabled, egui::Button::new(icon).small())
+                    .on_hover_text(tip)
+                    .clicked()
+            };
+            if button(ui, earlier, pos > 0, env.t("column-earlier")) {
+                moved = Some(pos - 1);
+            }
+            if button(ui, later, pos + 1 < order.len(), env.t("column-later")) {
+                moved = Some(pos + 1);
+            }
+            if col.width.is_some() {
+                let mut shown = !env.settings.column_hidden(salt, col.title_id);
+                if ui.checkbox(&mut shown, env.t(col.title_id)).changed() {
+                    env.push(Action::ToggleColumn(salt, col.title_id));
+                }
+            } else {
+                ui.add_enabled(false, egui::Checkbox::new(&mut true, env.t(col.title_id)));
+            }
+            if let Some(to) = moved {
+                let mut new = order.clone();
+                new.swap(pos, to);
+                env.push(Action::SetColumnOrder(
+                    salt,
+                    new.into_iter().map(|i| cols[i].title_id).collect(),
+                ));
+            }
+        });
+    }
+    ui.separator();
+    if ui.button(env.t("columns-reset")).clicked() {
+        env.push(Action::ResetColumns(salt));
+        ui.close();
     }
 }
 
@@ -220,6 +280,13 @@ mod tests {
         assert_eq!(visible_columns(&COLS, 1000.0, 0.0, none), [0, 1, 2, 3]);
         assert_eq!(visible_columns(&COLS, 400.0, 0.0, none), [0, 1, 3]);
         assert_eq!(visible_columns(&COLS, 100.0, 0.0, none), [0]);
+    }
+
+    #[test]
+    fn saved_order_comes_first_then_the_defaults() {
+        let saved = vec!["d".to_owned(), "gone".to_owned(), "b".to_owned()];
+        assert_eq!(arranged(&COLS, Some(&saved)), [3, 1, 0, 2]);
+        assert_eq!(arranged(&COLS, None), [0, 1, 2, 3]);
     }
 
     #[test]

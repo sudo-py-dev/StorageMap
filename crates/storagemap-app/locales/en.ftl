@@ -70,6 +70,9 @@ tab-search = Search
 
 ## Columns
 columns-menu = Columns
+column-earlier = Move earlier
+column-later = Move later
+columns-reset = Reset columns
 col-name = Name
 col-size = Size
 col-allocated = On disk
