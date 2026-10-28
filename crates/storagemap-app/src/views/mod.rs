@@ -237,7 +237,9 @@ pub struct ScanView {
     /// Owners anywhere in the scan, for the folder tree's filter.
     pub(super) all_owners: Cached<u64, Vec<u32>>,
     pub(super) ages: Cached<(NodeId, u64), [AgeStat; 7]>,
-    pub(super) search: Cached<search::Key, Vec<NodeId>>,
+    pub(super) search: Cached<search::Key, Vec<search::Hit>>,
+    /// Search every open scan, not only this one.
+    pub(super) search_all_tabs: bool,
     pub search_filters: search::Filters,
     pub(super) show_search_filters: bool,
     pub(super) save_search_name: String,
@@ -289,6 +291,7 @@ impl ScanView {
             all_owners: Cached::default(),
             ages: Cached::default(),
             search: Cached::default(),
+            search_all_tabs: false,
             search_filters: search::Filters::default(),
             show_search_filters: false,
             save_search_name: String::new(),
@@ -304,7 +307,7 @@ impl ScanView {
     }
 
     /// The current search's results, as last shown in the Search tab.
-    pub fn search_results(&self) -> &[NodeId] {
+    pub fn search_results(&self) -> &[search::Hit] {
         self.search.value()
     }
 

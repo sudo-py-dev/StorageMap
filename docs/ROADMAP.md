@@ -39,11 +39,12 @@ shared foundations the later items build on.
 - Choose and reorder columns per table, and per export. *(Tables done:
   right-click a column header. Per-export columns come with Phase 4.)*
 
-## Phase 2 — Search
+## Phase 2 — Search (done)
 
 - Advanced search: name patterns, size range, dates, type, owner,
   attributes, combined freely, with saved searches. *(Done.)*
 - Search several drives or folders at once, including network shares.
+  *(Done: scan each one (they open as tabs), then search "All open scans".)*
 - Export search results in every report format. *(Done for CSV and the
   clipboard; more formats come with Phase 4.)*
 - Duplicate finder: optional SHA-256 output, keep/remove rules per group.

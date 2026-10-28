@@ -1,6 +1,7 @@
 //! Search tab: a name field, optional filters (type, size, age, owner,
 //! attributes), saved searches, and the results as a table.
 
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use egui::{ComboBox, Response, Ui, vec2};
@@ -9,8 +10,9 @@ use storagemap_core::analysis::extension_of;
 use storagemap_core::search::{self, Entries, SearchQuery};
 use storagemap_core::{Flags, Kind, NodeId, Tree};
 
-use super::lists::{ENTRY_COLUMNS, EntryList};
-use super::{Env, ScanView, table};
+use super::lists::ENTRY_COLUMNS;
+use super::table::TableSource;
+use super::{Env, ScanView, node_menu, table};
 use crate::app::Action;
 use crate::filetype::Category;
 use crate::i18n::{Direction, bidi};
@@ -175,6 +177,90 @@ pub struct Key {
     text: String,
     filters: Filters,
     generation: u64,
+    /// The other open scans searched too (root and generation), if any.
+    others: Option<Vec<(PathBuf, u64)>>,
+}
+
+/// One result: an entry of this scan, or of another open scan (by its
+/// position among them).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hit {
+    pub tab: Option<usize>,
+    pub id: NodeId,
+}
+
+impl Hit {
+    /// The tree the hit belongs to.
+    pub fn tree<'a>(&self, this: &'a Tree, others: &'a [ScanView]) -> &'a Tree {
+        match self.tab {
+            Some(i) => &others[i].tree,
+            None => this,
+        }
+    }
+}
+
+/// Results with their entry's name, size, containing folder and date.
+struct HitList<'a> {
+    this: &'a Tree,
+    others: &'a [ScanView],
+    hits: &'a [Hit],
+    selected: Option<NodeId>,
+}
+
+impl TableSource for HitList<'_> {
+    fn rows(&self) -> usize {
+        self.hits.len()
+    }
+
+    fn is_selected(&self, row: usize) -> bool {
+        let hit = self.hits[row];
+        hit.tab.is_none() && self.selected == Some(hit.id)
+    }
+
+    fn cell(&mut self, ui: &mut Ui, env: &mut Env<'_>, row: usize, col: usize) {
+        let hit = self.hits[row];
+        let tree = hit.tree(self.this, self.others);
+        let node = tree.node(hit.id);
+        match col {
+            0 => table::text(ui, env, &tree.name(hit.id), false),
+            1 => table::text(ui, env, &env.metric_text(node), true),
+            3 => table::text(ui, env, &crate::fmt::date(node.modified), true),
+            _ => {
+                let parent = tree
+                    .parent(hit.id)
+                    .map(|p| tree.path(p).to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                table::text(ui, env, &parent, false);
+            }
+        }
+    }
+
+    fn row_response(&mut self, env: &mut Env<'_>, row: usize, response: &Response) {
+        let hit = self.hits[row];
+        match hit.tab {
+            None => {
+                if response.double_clicked() {
+                    env.push(Action::Focus(hit.id));
+                } else if response.clicked() {
+                    env.push(Action::Select(hit.id));
+                }
+                response.context_menu(|ui| node_menu::show(ui, env, self.this, hit.id));
+            }
+            // Its scan is in another tab: go there.
+            Some(i) => {
+                if response.clicked() {
+                    let tree = &self.others[i].tree;
+                    env.push(Action::RevealInTab {
+                        root: tree.root_path().to_path_buf(),
+                        path: tree.path(hit.id),
+                    });
+                }
+                response
+                    .clone()
+                    .on_hover_text(env.t("search-other-tab-hint"));
+            }
+        }
+    }
 }
 
 /// A name-search text field bound to the scan's query.
@@ -209,7 +295,8 @@ pub fn search_box(ui: &mut Ui, env: &Env<'_>, scan: &mut ScanView, width: f32) {
     }
 }
 
-pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
+/// `others` are the other open scans, searched too when the user asks.
+pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView, others: &[ScanView]) {
     crate::widgets::row(ui, env.i18n.dir(), |ui| {
         let width = (ui.available_width() - 260.0).clamp(160.0, SEARCH_FIELD_WIDTH);
         let response = query_edit(ui, env, scan, width, vec2(10.0, 8.0));
@@ -229,6 +316,11 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         let filters_label = format!("{}  {}", crate::icons::FILTER, env.t("search-filters"));
         ui.toggle_value(&mut scan.show_search_filters, filters_label);
         saved_menu(ui, env, scan);
+        if !others.is_empty() {
+            let label = format!("{}  {}", crate::icons::TABS, env.t("search-all-tabs"));
+            ui.toggle_value(&mut scan.search_all_tabs, label)
+                .on_hover_text(env.t("search-all-tabs-hint"));
+        }
     });
     if scan.show_search_filters {
         ui.add_space(6.0);
@@ -255,15 +347,29 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         return;
     }
     let (tree, focus) = (&scan.tree, scan.focus);
+    let all_tabs = scan.search_all_tabs && !others.is_empty();
     let key = Key {
         focus,
         text: text.clone(),
         filters: scan.search_filters.clone(),
         generation: scan.generation,
+        others: all_tabs.then(|| {
+            others
+                .iter()
+                .map(|o| (o.tree.root_path().to_path_buf(), o.generation))
+                .collect()
+        }),
     };
-    let ids: &[NodeId] = if settled {
+    let ids: &[Hit] = if settled {
         let filters = &scan.search_filters;
-        scan.search.get(key, || run(tree, focus, &text, filters))
+        scan.search.get(key, || {
+            let other_trees: Vec<&Tree> = if all_tabs {
+                others.iter().map(|o| &o.tree).collect()
+            } else {
+                Vec::new()
+            };
+            hits(tree, focus, &other_trees, &text, filters)
+        })
     } else {
         &[]
     };
@@ -299,12 +405,38 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         env,
         "search",
         &ENTRY_COLUMNS,
-        &mut EntryList {
-            tree,
-            ids,
+        &mut HitList {
+            this: tree,
+            others,
+            hits: ids,
             selected: scan.selected,
         },
     );
+}
+
+/// Results below `focus` in `this` and anywhere in `others`, largest first.
+fn hits(this: &Tree, focus: NodeId, others: &[&Tree], text: &str, filters: &Filters) -> Vec<Hit> {
+    let mut hits: Vec<Hit> = run(this, focus, text, filters)
+        .into_iter()
+        .map(|id| Hit { tab: None, id })
+        .collect();
+    if others.is_empty() {
+        return hits;
+    }
+    for (i, other) in others.iter().enumerate() {
+        hits.extend(
+            run(other, other.root(), text, filters)
+                .into_iter()
+                .map(|id| Hit { tab: Some(i), id }),
+        );
+    }
+    let size = |h: &Hit| match h.tab {
+        Some(i) => others[i].node(h.id).size,
+        None => this.node(h.id).size,
+    };
+    hits.sort_by_key(|h| std::cmp::Reverse(size(h)));
+    hits.truncate(SEARCH_LIMIT);
+    hits
 }
 
 /// Runs the search below `focus`.
@@ -511,6 +643,61 @@ fn bidi_layouter(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn searches_other_scans_too_largest_first() {
+        use storagemap_core::{EntryInfo, TreeBuilder};
+        let tree = |root: &str, files: &[(&str, u64)]| {
+            let dir = EntryInfo {
+                kind: Kind::Dir,
+                flags: Flags::empty(),
+                modified: 0,
+                accessed: 0,
+                created: 0,
+                owner: storagemap_core::NO_OWNER,
+                size: 0,
+                allocated: 0,
+            };
+            let mut b = TreeBuilder::new(PathBuf::from(root), dir);
+            for &(name, size) in files {
+                b.push(
+                    NodeId::ROOT,
+                    name.as_bytes(),
+                    EntryInfo {
+                        kind: Kind::File,
+                        size,
+                        ..dir
+                    },
+                );
+            }
+            b.finish()
+        };
+        let a = tree("/a", &[("x.iso", 10), ("note.txt", 1)]);
+        let b = tree("/b", &[("y.iso", 30)]);
+        let filters = Filters::default();
+        let here = hits(&a, a.root(), &[], "*.iso", &filters);
+        assert_eq!(
+            here,
+            [Hit {
+                tab: None,
+                id: NodeId(1)
+            }]
+        );
+        let all = hits(&a, a.root(), &[&b], "*.iso", &filters);
+        assert_eq!(
+            all,
+            [
+                Hit {
+                    tab: Some(0),
+                    id: NodeId(1)
+                },
+                Hit {
+                    tab: None,
+                    id: NodeId(1)
+                }
+            ]
+        );
+    }
 
     #[test]
     fn relative_dates_become_bounds() {

@@ -106,16 +106,15 @@ pub fn write_tree(
     writer.finish()
 }
 
-/// Writes exactly the entries `ids` (search results, for example), in
-/// that order, with the same columns as [`write_tree`].
-pub fn write_entries(
-    tree: &Tree,
-    ids: &[NodeId],
+/// Writes exactly the given entries (search results, for example, possibly
+/// from several scans), in that order, with the same columns as [`write_tree`].
+pub fn write_entries<'a>(
+    entries: impl IntoIterator<Item = (&'a Tree, NodeId)>,
     labels: &ReportLabels,
     writer: &mut dyn ReportWriter,
 ) -> io::Result<()> {
     writer.header(&labels.headers)?;
-    for &id in ids {
+    for (tree, id) in entries {
         write_row(tree, id, labels, writer)?;
     }
     writer.finish()
@@ -351,7 +350,7 @@ mod tests {
         let file = t.find(std::path::Path::new("/r/d/f")).expect("file");
         let mut buf = Vec::new();
         let mut csv = Delimited::csv(&mut buf);
-        write_entries(&t, &[file], &ReportLabels::default(), &mut csv).expect("csv");
+        write_entries([(&t, file)], &ReportLabels::default(), &mut csv).expect("csv");
         drop(csv);
         let text = String::from_utf8(buf).expect("utf8");
         assert_eq!(text.lines().count(), 2);

@@ -43,6 +43,11 @@ enum Scope {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     StartScan(PathBuf),
+    /// Shows the tab that scanned `root` and reveals `path` in it.
+    RevealInTab {
+        root: PathBuf,
+        path: PathBuf,
+    },
     /// Shows the scan tab at this position.
     SwitchTab(usize),
     CloseTab(usize),
@@ -394,6 +399,20 @@ impl App {
                 self.volumes = volumes::list();
             }
             Action::SwitchTab(index) => self.tabs().switch(index),
+            Action::RevealInTab { root, path } => {
+                let index = (0..self.tab_count())
+                    .find(|&i| self.tab(i).is_some_and(|(v, _)| v.tree.root_path() == root));
+                if let Some(index) = index {
+                    self.tabs().switch(index);
+                    if let Some(scan) = &mut self.scan
+                        && let Some(id) = scan.tree.find(&path)
+                    {
+                        scan.set_focus(id);
+                        scan.tab = Tab::Details;
+                        scan.tab_changed = Some(Instant::now());
+                    }
+                }
+            }
             Action::CloseTab(index) => self.close_tab(index),
             Action::Focus(id) => self.with_scan(|s| s.set_focus(id)),
             Action::Select(id) => self.with_scan(|s| s.select(id)),
@@ -653,7 +672,11 @@ impl App {
                 export::write_tree(&scan.tree, scan.focus, depth, &labels, &mut writer)
             }
             Scope::SearchResults => {
-                export::write_entries(&scan.tree, scan.search_results(), &labels, &mut writer)
+                let entries = scan
+                    .search_results()
+                    .iter()
+                    .map(|h| (h.tree(&scan.tree, &self.parked), h.id));
+                export::write_entries(entries, &labels, &mut writer)
             }
         }
     }

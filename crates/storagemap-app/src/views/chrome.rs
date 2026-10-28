@@ -676,6 +676,7 @@ pub fn body(app: &mut App, ui: &mut Ui) {
         settings,
         actions,
         scan,
+        parked,
         job,
         volumes,
         elevated,
@@ -708,7 +709,7 @@ pub fn body(app: &mut App, ui: &mut Ui) {
                 });
             CentralPanel::default()
                 .frame(central)
-                .show(ui, |ui| central_view(ui, &mut env, scan));
+                .show(ui, |ui| central_view(ui, &mut env, scan, parked));
         }
         (None, Some(job)) => {
             let snap = job.progress.snapshot();
@@ -725,7 +726,8 @@ pub fn body(app: &mut App, ui: &mut Ui) {
     }
 }
 
-fn central_view(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
+/// `others` are the other open scan tabs (for searching them all).
+fn central_view(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView, others: &[ScanView]) {
     breadcrumbs(ui, env, scan);
     cleanup_chip(ui, env, scan);
     ui.add_space(4.0);
@@ -760,7 +762,7 @@ fn central_view(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         Tab::TopFiles => lists::top_files(ui, env, scan),
         Tab::Types => lists::types(ui, env, scan),
         Tab::Ages => lists::ages(ui, env, scan),
-        Tab::Search => search::show(ui, env, scan),
+        Tab::Search => search::show(ui, env, scan, others),
         Tab::Changes => changes::show(ui, env, scan),
         Tab::Duplicates => duplicates::show(ui, env, scan),
         Tab::Cleanup => cleanup::show(ui, env, scan),

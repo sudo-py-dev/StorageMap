@@ -13,10 +13,10 @@ use crate::fmt;
 const TOP_FILES: usize = 500;
 
 /// A list of entries with name, value and containing folder.
-pub(super) struct EntryList<'a> {
-    pub tree: &'a Tree,
-    pub ids: &'a [NodeId],
-    pub selected: Option<NodeId>,
+struct EntryList<'a> {
+    tree: &'a Tree,
+    ids: &'a [NodeId],
+    selected: Option<NodeId>,
 }
 
 pub(super) const ENTRY_COLUMNS: [Col; 4] = [
