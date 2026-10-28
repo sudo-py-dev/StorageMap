@@ -1,6 +1,4 @@
-//! Largest files, file types, age distribution and name search.
-
-use std::time::{Duration, Instant};
+//! Largest files, file types and age distribution.
 
 use egui::{Response, Ui, vec2};
 use storagemap_core::analysis::{self, AgeBucket, AgeStat, ExtensionStat, OwnerStat};
@@ -11,25 +9,21 @@ use super::{Env, ScanView, node_menu};
 use crate::app::Action;
 use crate::filetype::Category;
 use crate::fmt;
-use crate::i18n::{Direction, bidi};
-use crate::widgets::empty_state;
 
 const TOP_FILES: usize = 500;
-const SEARCH_LIMIT: usize = 2_000;
-/// Wait this long after the last keystroke before searching.
-const SEARCH_DEBOUNCE: Duration = Duration::from_millis(250);
 
 /// A list of entries with name, value and containing folder.
-struct EntryList<'a> {
-    tree: &'a Tree,
-    ids: &'a [NodeId],
-    selected: Option<NodeId>,
+pub(super) struct EntryList<'a> {
+    pub tree: &'a Tree,
+    pub ids: &'a [NodeId],
+    pub selected: Option<NodeId>,
 }
 
-const ENTRY_COLUMNS: [Col; 3] = [
+pub(super) const ENTRY_COLUMNS: [Col; 4] = [
     Col::fixed("col-name", 240.0, 1),
     Col::fixed("col-size", 92.0, 2),
     Col::flex("col-path"),
+    Col::fixed("col-modified", 88.0, 3),
 ];
 
 impl TableSource for EntryList<'_> {
@@ -46,6 +40,7 @@ impl TableSource for EntryList<'_> {
         match col {
             0 => table::text(ui, env, &self.tree.name(id), false),
             1 => table::text(ui, env, &env.metric_text(self.tree.node(id)), true),
+            3 => table::text(ui, env, &fmt::date(self.tree.node(id).modified), true),
             _ => {
                 let parent = self
                     .tree
@@ -302,120 +297,4 @@ pub fn ages(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
             metric,
         },
     );
-}
-
-/// Room for the full hint and a typical name in the Search tab's field.
-const SEARCH_FIELD_WIDTH: f32 = 560.0;
-
-/// A name-search text field bound to the scan's query.
-fn query_edit(
-    ui: &mut Ui,
-    env: &Env<'_>,
-    scan: &mut ScanView,
-    width: f32,
-    margin: egui::Vec2,
-) -> Response {
-    let mut layouter = bidi_layouter(env.i18n.dir());
-    let hint = format!("{}  {}", crate::icons::SEARCH, env.t("search-hint"));
-    let edit = egui::TextEdit::singleline(&mut scan.search_query)
-        .hint_text(hint)
-        .desired_width(width)
-        .margin(margin)
-        .layouter(&mut layouter);
-    let response = ui.add(edit);
-    if response.changed() {
-        scan.search_edited = Some(Instant::now());
-    }
-    response
-}
-
-/// The toolbar search field, shown outside the Search tab. Typing switches
-/// to the Search tab, whose own field takes over.
-pub fn search_box(ui: &mut Ui, env: &Env<'_>, scan: &mut ScanView, width: f32) {
-    if query_edit(ui, env, scan, width, vec2(4.0, 2.0)).changed() {
-        scan.tab = super::Tab::Search;
-        scan.tab_changed = Some(Instant::now());
-        scan.focus_search = true;
-    }
-}
-
-pub fn search(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
-    crate::widgets::row(ui, env.i18n.dir(), |ui| {
-        let width = ui.available_width().min(SEARCH_FIELD_WIDTH);
-        let response = query_edit(ui, env, scan, width, vec2(10.0, 8.0));
-        if std::mem::take(&mut scan.focus_search) {
-            response.request_focus();
-        }
-        if !scan.search_query.is_empty()
-            && ui
-                .button(crate::icons::CLOSE)
-                .on_hover_text(env.t("search-clear"))
-                .clicked()
-        {
-            scan.search_query.clear();
-            scan.search_edited = None;
-            response.request_focus();
-        }
-    });
-    ui.add_space(8.0);
-    let settled = scan
-        .search_edited
-        .is_none_or(|t| t.elapsed() >= SEARCH_DEBOUNCE);
-    if !settled {
-        ui.ctx().request_repaint_after(SEARCH_DEBOUNCE);
-    }
-    let query = scan.search_query.trim().to_owned();
-    if query.is_empty() {
-        empty_state(
-            ui,
-            env.i18n,
-            crate::icons::SEARCH,
-            "tab-search",
-            "search-empty",
-            |_| {},
-        );
-        return;
-    }
-    let (tree, focus) = (&scan.tree, scan.focus);
-    let key = (focus, query.clone(), scan.generation);
-    let ids: &[NodeId] = if settled {
-        scan.search
-            .get(key, || analysis::search(tree, focus, &query, SEARCH_LIMIT))
-    } else {
-        &[]
-    };
-    ui.weak(
-        env.i18n
-            .v(&env.i18n.count("search-results", ids.len() as u64)),
-    );
-    table::show(
-        ui,
-        env,
-        "search",
-        &ENTRY_COLUMNS,
-        &mut EntryList {
-            tree,
-            ids,
-            selected: scan.selected,
-        },
-    );
-}
-
-/// Shows typed RTL text in visual order. Reordering keeps the character
-/// count, so cursor positions stay meaningful.
-fn bidi_layouter(
-    dir: Direction,
-) -> impl FnMut(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley> {
-    move |ui: &Ui, text: &dyn egui::TextBuffer, _wrap: f32| {
-        let logical = text.as_str();
-        let visual = bidi::visual(logical, dir);
-        let shown = if visual.chars().count() == logical.chars().count() {
-            visual
-        } else {
-            logical.to_owned()
-        };
-        let font = egui::TextStyle::Body.resolve(ui.style());
-        ui.painter()
-            .layout_no_wrap(shown, font, ui.visuals().text_color())
-    }
 }

@@ -151,6 +151,30 @@ already-in-trash = This item is already in the trash
 ## Misc
 search-hint = Search names…
 search-clear = Clear search
+search-filters = Filters
+search-saved = Saved
+search-saved-none = No saved searches yet
+search-saved-name = Name
+search-save = Save
+search-saved-delete = Delete this saved search
+search-export = Export…
+search-copy-hint = Copy the results, ready to paste into a spreadsheet.
+filter-everything = Files and folders
+filter-files = Files
+filter-folders = Folders
+filter-at-least = At least
+filter-at-most = At most
+filter-any-size = any size
+filter-any-time = Modified any time
+filter-within-week = Modified in the last 7 days
+filter-within-month = Modified in the last 30 days
+filter-within-year = Modified in the last year
+filter-older-year = Not modified for a year
+filter-older-two-years = Not modified for 2 years
+filter-older-five-years = Not modified for 5 years
+filter-any-owner = Any owner
+filter-any-attribute = Any attributes
+filter-clear = Clear filters
 search-results =
     { $count ->
         [one] 1 match

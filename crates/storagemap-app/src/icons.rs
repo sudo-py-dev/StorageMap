@@ -62,6 +62,7 @@ pub const CHART_DONUT: &str = "\u{EAA6}";
 pub const CHART_BARS: &str = "\u{E152}";
 pub const FILTER: &str = "\u{E266}";
 pub const PLUS: &str = "\u{E3D4}";
+pub const SAVED: &str = "\u{E0EA}";
 pub const CARET_LEFT: &str = "\u{E138}";
 pub const CARET_RIGHT: &str = "\u{E13A}";
 pub const AGE: &str = "\u{E19A}";

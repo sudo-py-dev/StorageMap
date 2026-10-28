@@ -9,6 +9,7 @@ mod details;
 pub mod duplicates;
 mod lists;
 mod node_menu;
+pub mod search;
 pub mod settings;
 mod start;
 mod table;
@@ -236,7 +237,10 @@ pub struct ScanView {
     /// Owners anywhere in the scan, for the folder tree's filter.
     pub(super) all_owners: Cached<u64, Vec<u32>>,
     pub(super) ages: Cached<(NodeId, u64), [AgeStat; 7]>,
-    pub(super) search: Cached<(NodeId, String, u64), Vec<NodeId>>,
+    pub(super) search: Cached<search::Key, Vec<NodeId>>,
+    pub search_filters: search::Filters,
+    pub(super) show_search_filters: bool,
+    pub(super) save_search_name: String,
     pub(super) details_rows: Cached<(NodeId, details::Sort, u64), Vec<NodeId>>,
     pub(super) chart: Cached<(NodeId, Metric, u64), Vec<chart::Slice>>,
     /// Active comparison with an earlier snapshot.
@@ -285,6 +289,9 @@ impl ScanView {
             all_owners: Cached::default(),
             ages: Cached::default(),
             search: Cached::default(),
+            search_filters: search::Filters::default(),
+            show_search_filters: false,
+            save_search_name: String::new(),
             details_rows: Cached::default(),
             chart: Cached::default(),
             comparison: None,
@@ -294,6 +301,11 @@ impl ScanView {
             cleanup: Cached::default(),
             cleanup_expanded: HashSet::new(),
         }
+    }
+
+    /// The current search's results, as last shown in the Search tab.
+    pub fn search_results(&self) -> &[NodeId] {
+        self.search.value()
     }
 
     /// Swaps in a newer tree of the same folder (a fresher partial tree, or

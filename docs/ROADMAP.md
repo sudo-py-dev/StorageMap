@@ -42,9 +42,10 @@ shared foundations the later items build on.
 ## Phase 2 — Search
 
 - Advanced search: name patterns, size range, dates, type, owner,
-  attributes, combined freely, with saved searches.
+  attributes, combined freely, with saved searches. *(Done.)*
 - Search several drives or folders at once, including network shares.
-- Export search results in every report format.
+- Export search results in every report format. *(Done for CSV and the
+  clipboard; more formats come with Phase 4.)*
 - Duplicate finder: optional SHA-256 output, keep/remove rules per group.
 - Replace duplicates with hard links (NTFS and Unix filesystems), after
   confirmation, with a dry run first.

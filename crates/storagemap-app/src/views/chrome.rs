@@ -11,8 +11,8 @@ use storagemap_core::export::Include;
 use storagemap_core::{Backend, Metric};
 
 use super::{
-    Env, ScanView, Tab, changes, chart, cleanup, details, duplicates, lists, start, tree_panel,
-    treemap,
+    Env, ScanView, Tab, changes, chart, cleanup, details, duplicates, lists, search, start,
+    tree_panel, treemap,
 };
 use crate::app::{Action, App, seconds};
 use crate::fmt;
@@ -395,7 +395,7 @@ fn toolbar(app: &mut App, ui: &mut Ui) {
                 if scan.tab == Tab::Search {
                     ui.add_space(SEARCH_WIDTH);
                 } else {
-                    lists::search_box(ui, &env, scan, SEARCH_WIDTH);
+                    search::search_box(ui, &env, scan, SEARCH_WIDTH);
                 }
             }
             ui.add_space(8.0);
@@ -760,7 +760,7 @@ fn central_view(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         Tab::TopFiles => lists::top_files(ui, env, scan),
         Tab::Types => lists::types(ui, env, scan),
         Tab::Ages => lists::ages(ui, env, scan),
-        Tab::Search => lists::search(ui, env, scan),
+        Tab::Search => search::show(ui, env, scan),
         Tab::Changes => changes::show(ui, env, scan),
         Tab::Duplicates => duplicates::show(ui, env, scan),
         Tab::Cleanup => cleanup::show(ui, env, scan),

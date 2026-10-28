@@ -86,6 +86,7 @@ pub struct Settings {
     /// Column order the user chose, by table id; columns not listed keep
     /// their default place after the listed ones.
     pub column_order: BTreeMap<String, Vec<String>>,
+    pub saved_searches: Vec<crate::views::search::SavedSearch>,
 }
 
 impl Default for Settings {
@@ -116,6 +117,7 @@ impl Default for Settings {
             scan_filter: ScanFilter::default(),
             hidden_columns: BTreeMap::new(),
             column_order: BTreeMap::new(),
+            saved_searches: Vec::new(),
         }
     }
 }

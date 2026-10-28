@@ -30,6 +30,15 @@ const CSV_EXPORT_DEPTH: usize = 64;
 /// details table: whole-drive reports are too large to paste.
 const CLIPBOARD_DEPTH: usize = 1;
 
+/// What a report covers.
+#[derive(Debug, Clone, Copy)]
+enum Scope {
+    /// The focused folder, this many levels deep.
+    Folder(usize),
+    /// The Search tab's results.
+    SearchResults,
+}
+
 /// Something the user asked for; applied after the frame is drawn.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
@@ -72,6 +81,12 @@ pub enum Action {
     SetColumnOrder(&'static str, Vec<&'static str>),
     ResetColumns(&'static str),
     SetChartStyle(crate::views::chart::Style),
+    /// Saves the current search results as CSV, or copies them.
+    ExportSearch,
+    CopySearch,
+    /// Saves a search by name, replacing one of the same name.
+    SaveSearch(crate::views::search::SavedSearch),
+    DeleteSavedSearch(usize),
     OpenSettings,
     CheckUpdates,
     InstallUpdate,
@@ -417,11 +432,11 @@ impl App {
             Action::CancelExport => self.show_export = false,
             Action::ConfirmExport => {
                 self.show_export = false;
-                self.export_csv();
+                self.export_csv(Scope::Folder(CSV_EXPORT_DEPTH));
             }
             Action::CopyReport => {
                 self.show_export = false;
-                self.copy_report(ctx);
+                self.copy_report(Scope::Folder(CLIPBOARD_DEPTH), ctx);
             }
             Action::SetLang(lang) => {
                 self.settings.lang = lang;
@@ -477,6 +492,18 @@ impl App {
             }
             Action::ResetColumns(table) => self.settings.reset_columns(table),
             Action::SetChartStyle(style) => self.settings.chart_style = style,
+            Action::ExportSearch => self.export_csv(Scope::SearchResults),
+            Action::CopySearch => self.copy_report(Scope::SearchResults, ctx),
+            Action::SaveSearch(search) => {
+                let saved = &mut self.settings.saved_searches;
+                saved.retain(|s| s.name != search.name);
+                saved.push(search);
+            }
+            Action::DeleteSavedSearch(index) => {
+                if index < self.settings.saved_searches.len() {
+                    self.settings.saved_searches.remove(index);
+                }
+            }
             Action::OpenSettings => self.show_settings = true,
             Action::CheckUpdates => {
                 self.update_dismissed = false;
@@ -594,7 +621,7 @@ impl App {
     /// when `tsv` is set.
     fn write_report(
         &self,
-        depth: usize,
+        scope: Scope,
         out: impl std::io::Write,
         tsv: bool,
     ) -> std::io::Result<()> {
@@ -611,29 +638,35 @@ impl App {
         if self.settings.export_readable {
             writer = writer.readable_sizes(&readable_fmt);
         }
-        export::write_tree(
-            &scan.tree,
-            scan.focus,
-            depth,
-            &self.report_labels(),
-            &mut writer,
-        )
+        let labels = self.report_labels();
+        match scope {
+            Scope::Folder(depth) => {
+                export::write_tree(&scan.tree, scan.focus, depth, &labels, &mut writer)
+            }
+            Scope::SearchResults => {
+                export::write_entries(&scan.tree, scan.search_results(), &labels, &mut writer)
+            }
+        }
     }
 
-    fn export_csv(&mut self) {
+    fn export_csv(&mut self, scope: Scope) {
         if self.scan.is_none() {
             return;
         }
+        let file_name = match scope {
+            Scope::Folder(_) => "storagemap.csv",
+            Scope::SearchResults => "storagemap-search.csv",
+        };
         let Some(target) = rfd::FileDialog::new()
             .set_title(self.i18n.logical("action-export-csv"))
-            .set_file_name("storagemap.csv")
+            .set_file_name(file_name)
             .add_filter("CSV", &["csv"])
             .save_file()
         else {
             return;
         };
-        let result = std::fs::File::create(&target)
-            .and_then(|f| self.write_report(CSV_EXPORT_DEPTH, f, false));
+        let result =
+            std::fs::File::create(&target).and_then(|f| self.write_report(scope, f, false));
         let text = match &result {
             Ok(()) => self
                 .i18n
@@ -645,11 +678,11 @@ impl App {
         self.notify(text, result.is_err());
     }
 
-    /// Copies the focused folder and its direct contents as tab-separated
-    /// text, which pastes into spreadsheets as a table.
-    fn copy_report(&mut self, ctx: &egui::Context) {
+    /// Copies the report as tab-separated text, which pastes into
+    /// spreadsheets as a table.
+    fn copy_report(&mut self, scope: Scope, ctx: &egui::Context) {
         let mut buf = Vec::new();
-        let result = self.write_report(CLIPBOARD_DEPTH, &mut buf, true);
+        let result = self.write_report(scope, &mut buf, true);
         match result {
             Ok(()) => {
                 ctx.copy_text(String::from_utf8_lossy(&buf).into_owned());

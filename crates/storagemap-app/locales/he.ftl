@@ -151,6 +151,30 @@ already-in-trash = הפריט כבר נמצא באשפה
 ## Misc
 search-hint = חיפוש לפי שם…
 search-clear = ניקוי החיפוש
+search-filters = מסננים
+search-saved = שמורים
+search-saved-none = אין עדיין חיפושים שמורים
+search-saved-name = שם
+search-save = שמירה
+search-saved-delete = מחיקת החיפוש השמור
+search-export = ייצוא…
+search-copy-hint = העתקת התוצאות, מוכנות להדבקה בגיליון אלקטרוני.
+filter-everything = קבצים ותיקיות
+filter-files = קבצים
+filter-folders = תיקיות
+filter-at-least = לפחות
+filter-at-most = לכל היותר
+filter-any-size = כל גודל
+filter-any-time = שונה בכל זמן
+filter-within-week = שונה ב־7 הימים האחרונים
+filter-within-month = שונה ב־30 הימים האחרונים
+filter-within-year = שונה בשנה האחרונה
+filter-older-year = לא שונה שנה
+filter-older-two-years = לא שונה שנתיים
+filter-older-five-years = לא שונה 5 שנים
+filter-any-owner = כל הבעלים
+filter-any-attribute = כל המאפיינים
+filter-clear = ניקוי המסננים
 search-results =
     { $count ->
         [one] תוצאה אחת

@@ -157,6 +157,30 @@ already-in-trash = هذا العنصر موجود بالفعل في سلة ال�
 ## Misc
 search-hint = البحث بالاسم…
 search-clear = مسح البحث
+search-filters = عوامل التصفية
+search-saved = المحفوظة
+search-saved-none = لا توجد عمليات بحث محفوظة بعد
+search-saved-name = الاسم
+search-save = حفظ
+search-saved-delete = حذف هذا البحث المحفوظ
+search-export = تصدير…
+search-copy-hint = نسخ النتائج، جاهزة للصق في جدول بيانات.
+filter-everything = الملفات والمجلدات
+filter-files = الملفات
+filter-folders = المجلدات
+filter-at-least = على الأقل
+filter-at-most = على الأكثر
+filter-any-size = أي حجم
+filter-any-time = عُدّل في أي وقت
+filter-within-week = عُدّل خلال آخر 7 أيام
+filter-within-month = عُدّل خلال آخر 30 يومًا
+filter-within-year = عُدّل خلال آخر سنة
+filter-older-year = لم يُعدَّل منذ سنة
+filter-older-two-years = لم يُعدَّل منذ سنتين
+filter-older-five-years = لم يُعدَّل منذ 5 سنوات
+filter-any-owner = أي مالك
+filter-any-attribute = أي سمات
+filter-clear = مسح عوامل التصفية
 search-results =
     { $count ->
         [zero] لا توجد نتائج

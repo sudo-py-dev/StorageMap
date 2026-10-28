@@ -118,6 +118,15 @@ pub fn build_rows(
     rows
 }
 
+/// Known owners anywhere in the scan, largest first.
+pub fn known_owners(tree: &Tree) -> Vec<u32> {
+    storagemap_core::analysis::owners(tree, tree.root(), Metric::Size)
+        .into_iter()
+        .map(|s| s.owner)
+        .filter(|&o| o != storagemap_core::NO_OWNER)
+        .collect()
+}
+
 /// Brings the cached rows (and filtered values, when a filter is active)
 /// up to date; read them with [`rows`] and [`values`].
 pub fn refresh(scan: &mut ScanView, metric: Metric) {
@@ -146,13 +155,7 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     let filter = scan.tree_filter;
     refresh(scan, env.settings.metric);
     let tree = &scan.tree;
-    let owners = scan.all_owners.get(scan.generation, || {
-        storagemap_core::analysis::owners(tree, tree.root(), Metric::Size)
-            .into_iter()
-            .map(|s| s.owner)
-            .filter(|&o| o != storagemap_core::NO_OWNER)
-            .collect()
-    });
+    let owners = scan.all_owners.get(scan.generation, || known_owners(tree));
     let rows = &scan.tree_rows.value()[..];
     let values = (filter != TreeFilter::All).then(|| scan.filtered.value().as_slice());
     let tree = &scan.tree;
