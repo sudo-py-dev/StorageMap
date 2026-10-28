@@ -113,7 +113,11 @@ pub fn show(
     for &c in &order {
         builder = builder.column(match cols[c].width {
             Some(w) => Column::initial(w).at_least(36.0).clip(true),
-            None => Column::remainder().at_least(120.0).clip(true),
+            // Not resizable, so it always takes the space the others leave.
+            None => Column::remainder()
+                .at_least(120.0)
+                .clip(true)
+                .resizable(false),
         });
     }
     builder
