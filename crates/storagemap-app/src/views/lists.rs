@@ -242,28 +242,60 @@ pub fn ages(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     );
 }
 
-/// The toolbar search field. Typing switches to the Search tab.
-pub fn search_box(ui: &mut Ui, env: &Env<'_>, scan: &mut ScanView, width: f32) {
+/// Room for the full hint and a typical name in the Search tab's field.
+const SEARCH_FIELD_WIDTH: f32 = 560.0;
+
+/// A name-search text field bound to the scan's query.
+fn query_edit(
+    ui: &mut Ui,
+    env: &Env<'_>,
+    scan: &mut ScanView,
+    width: f32,
+    margin: egui::Vec2,
+) -> Response {
     let mut layouter = bidi_layouter(env.i18n.dir());
     let hint = format!("{}  {}", crate::icons::SEARCH, env.t("search-hint"));
     let edit = egui::TextEdit::singleline(&mut scan.search_query)
         .hint_text(hint)
         .desired_width(width)
+        .margin(margin)
         .layouter(&mut layouter);
     let response = ui.add(edit);
-    if std::mem::take(&mut scan.focus_search) {
-        response.request_focus();
-    }
     if response.changed() {
         scan.search_edited = Some(Instant::now());
-        if scan.tab != super::Tab::Search {
-            scan.tab = super::Tab::Search;
-            scan.tab_changed = Some(Instant::now());
-        }
+    }
+    response
+}
+
+/// The toolbar search field, shown outside the Search tab. Typing switches
+/// to the Search tab, whose own field takes over.
+pub fn search_box(ui: &mut Ui, env: &Env<'_>, scan: &mut ScanView, width: f32) {
+    if query_edit(ui, env, scan, width, vec2(4.0, 2.0)).changed() {
+        scan.tab = super::Tab::Search;
+        scan.tab_changed = Some(Instant::now());
+        scan.focus_search = true;
     }
 }
 
 pub fn search(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
+    crate::widgets::row(ui, env.i18n.dir(), |ui| {
+        let width = ui.available_width().min(SEARCH_FIELD_WIDTH);
+        let response = query_edit(ui, env, scan, width, vec2(10.0, 8.0));
+        if std::mem::take(&mut scan.focus_search) {
+            response.request_focus();
+        }
+        if !scan.search_query.is_empty()
+            && ui
+                .button(crate::icons::CLOSE)
+                .on_hover_text(env.t("search-clear"))
+                .clicked()
+        {
+            scan.search_query.clear();
+            scan.search_edited = None;
+            response.request_focus();
+        }
+    });
+    ui.add_space(8.0);
     let settled = scan
         .search_edited
         .is_none_or(|t| t.elapsed() >= SEARCH_DEBOUNCE);

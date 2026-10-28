@@ -389,7 +389,13 @@ fn toolbar(app: &mut App, ui: &mut Ui) {
                     settings,
                     actions,
                 };
-                lists::search_box(ui, &env, scan, SEARCH_WIDTH);
+                // The Search tab has its own, larger field; keep the space
+                // so the toolbar does not shift.
+                if scan.tab == Tab::Search {
+                    ui.add_space(SEARCH_WIDTH);
+                } else {
+                    lists::search_box(ui, &env, scan, SEARCH_WIDTH);
+                }
             }
             ui.add_space(8.0);
             segmented(ui, dir, |ui| {
@@ -627,6 +633,7 @@ fn central_view(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     });
     if scan.tab != before {
         scan.tab_changed = Some(Instant::now());
+        scan.focus_search |= scan.tab == Tab::Search;
     }
     ui.add_space(6.0);
     // Cross-fade the new tab in.
@@ -1022,6 +1029,10 @@ pub fn keyboard(app: &mut App, ctx: &egui::Context) {
     if shortcut(FIND)
         && let Some(scan) = &mut app.scan
     {
+        if scan.tab != Tab::Search {
+            scan.tab = Tab::Search;
+            scan.tab_changed = Some(Instant::now());
+        }
         scan.focus_search = true;
     }
     if ctx.egui_wants_keyboard_input() || app.confirm_trash.is_some()

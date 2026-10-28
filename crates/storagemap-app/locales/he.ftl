@@ -113,6 +113,7 @@ already-in-trash = הפריט כבר נמצא באשפה
 
 ## Misc
 search-hint = חיפוש לפי שם…
+search-clear = ניקוי החיפוש
 search-results =
     { $count ->
         [one] תוצאה אחת
@@ -286,7 +287,7 @@ settings-shortcuts = קיצורי מקלדת
 shortcut-enter = פתיחת התיקייה הנבחרת
 shortcut-arrows = ניווט בעץ התיקיות
 shortcut-double-click = התמקדות בתיקייה במפת העץ
-search-empty = הקלידו חלק משם של קובץ או תיקייה כדי למצוא אותו בתיקייה הנוכחית.
+search-empty = הקלידו בשדה שלמעלה חלק משם של קובץ או תיקייה כדי למצוא אותו בתיקייה הנוכחית.
 dup-empty-title = מציאת קבצים שמבזבזים מקום
 empty-folder-hint = בחרו תיקייה אחרת בעץ, או עלו רמה אחת.
 

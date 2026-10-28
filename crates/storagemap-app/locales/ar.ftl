@@ -115,6 +115,7 @@ already-in-trash = هذا العنصر موجود بالفعل في سلة ال�
 
 ## Misc
 search-hint = البحث بالاسم…
+search-clear = مسح البحث
 search-results =
     { $count ->
         [zero] لا توجد نتائج
@@ -297,7 +298,7 @@ settings-shortcuts = اختصارات لوحة المفاتيح
 shortcut-enter = فتح المجلد المحدد
 shortcut-arrows = التنقل في شجرة المجلدات
 shortcut-double-click = التكبير داخل مجلد في الخريطة الشجرية
-search-empty = اكتب جزءًا من اسم ملف أو مجلد للعثور عليه في المجلد الحالي.
+search-empty = اكتب في الحقل أعلاه جزءًا من اسم ملف أو مجلد للعثور عليه في المجلد الحالي.
 dup-empty-title = اعثر على الملفات التي تهدر المساحة
 empty-folder-hint = اختر مجلدًا آخر من الشجرة، أو انتقل مستوى للأعلى.
 

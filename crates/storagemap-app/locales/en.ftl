@@ -113,6 +113,7 @@ already-in-trash = This item is already in the trash
 
 ## Misc
 search-hint = Search names…
+search-clear = Clear search
 search-results =
     { $count ->
         [one] 1 match
@@ -282,7 +283,7 @@ settings-shortcuts = Keyboard shortcuts
 shortcut-enter = Open the selected folder
 shortcut-arrows = Move through the folder tree
 shortcut-double-click = Zoom into a folder in the treemap
-search-empty = Type part of a file or folder name to find it in the current folder.
+search-empty = Type part of a file or folder name above to find it in the current folder.
 dup-empty-title = Find files that waste space
 empty-folder-hint = Pick another folder in the tree, or go up a level.
 

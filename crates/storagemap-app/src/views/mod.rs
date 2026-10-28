@@ -175,7 +175,7 @@ pub struct ScanView {
     /// Folder tree scroll offset and viewport height from the last frame.
     pub(super) tree_scroll: (f32, f32),
     pub search_query: String,
-    /// Ctrl+F asks the toolbar search box to take focus.
+    /// The Search tab's field takes focus on its next frame (Ctrl+F, opening the tab).
     pub focus_search: bool,
     pub search_edited: Option<std::time::Instant>,
     pub details_sort: details::Sort,
