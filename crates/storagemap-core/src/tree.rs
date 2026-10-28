@@ -30,7 +30,7 @@ pub enum Kind {
 
 /// Per-node state bits.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct Flags(u8);
+pub struct Flags(u16);
 
 impl Flags {
     /// The entry could not be read (permission denied, vanished, ...).
@@ -45,6 +45,16 @@ impl Flags {
     pub const INCOMPLETE: Flags = Flags(1 << 4);
     /// The entry is hidden (dot-file or hidden attribute).
     pub const HIDDEN: Flags = Flags(1 << 5);
+    /// Read-only (Windows attribute, no write permission, or immutable).
+    pub const READ_ONLY: Flags = Flags(1 << 6);
+    /// Windows system file.
+    pub const SYSTEM: Flags = Flags(1 << 7);
+    /// Stored compressed by the filesystem.
+    pub const COMPRESSED: Flags = Flags(1 << 8);
+    /// Stored encrypted by the filesystem.
+    pub const ENCRYPTED: Flags = Flags(1 << 9);
+    /// Sparse: unwritten ranges take no space.
+    pub const SPARSE: Flags = Flags(1 << 10);
 
     pub const fn empty() -> Self {
         Flags(0)

@@ -76,6 +76,25 @@ pub fn tooltip(ui: &mut Ui, env: &Env<'_>, tree: &Tree, id: NodeId) {
                 fmt::date(node.modified)
             )));
         }
+        let attributes: Vec<String> = [
+            (Flags::READ_ONLY, "attr-read-only"),
+            (Flags::HIDDEN, "attr-hidden"),
+            (Flags::SYSTEM, "attr-system"),
+            (Flags::COMPRESSED, "attr-compressed"),
+            (Flags::ENCRYPTED, "attr-encrypted"),
+            (Flags::SPARSE, "attr-sparse"),
+        ]
+        .into_iter()
+        .filter(|&(flag, _)| node.flags.contains(flag))
+        .map(|(_, id)| i18n.logical(id))
+        .collect();
+        if !attributes.is_empty() {
+            ui.label(i18n.v(&format!(
+                "{}: {}",
+                i18n.logical("col-attributes"),
+                attributes.join(", ")
+            )));
+        }
         for (flag, id) in [
             (Flags::HARDLINK_DUP, "note-hardlink"),
             (Flags::MOUNT_POINT, "note-mount"),

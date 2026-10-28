@@ -12,7 +12,9 @@ use std::os::fd::{AsFd, OwnedFd};
 use std::path::Path;
 use std::sync::Mutex;
 
-use rustix::fs::{AtFlags, CWD, Dir, FileType, Mode, OFlags, Statx, StatxFlags, openat, statx};
+use rustix::fs::{
+    AtFlags, CWD, Dir, FileType, Mode, OFlags, Statx, StatxAttributes, StatxFlags, openat, statx,
+};
 
 use crate::backend::Backend;
 use crate::progress::ScanProgress;
@@ -27,7 +29,8 @@ const STATX_MASK: StatxFlags = StatxFlags::TYPE
     .union(StatxFlags::NLINK)
     .union(StatxFlags::MTIME)
     .union(StatxFlags::ATIME)
-    .union(StatxFlags::BTIME);
+    .union(StatxFlags::BTIME)
+    .union(StatxFlags::MODE);
 const STAT_FLAGS: AtFlags = AtFlags::SYMLINK_NOFOLLOW.union(AtFlags::STATX_DONT_SYNC);
 const DIR_FLAGS: OFlags = OFlags::RDONLY
     .union(OFlags::DIRECTORY)
@@ -119,6 +122,23 @@ impl Platform for Linux {
     }
 }
 
+/// Read-only (no write permission for anyone, or immutable), compressed
+/// and encrypted, as far as the filesystem reports them.
+fn attribute_flags(st: &Statx) -> Flags {
+    let mut flags = Flags::empty();
+    let attrs = st.stx_attributes & st.stx_attributes_mask;
+    if u32::from(st.stx_mode) & 0o222 == 0 || attrs.contains(StatxAttributes::IMMUTABLE) {
+        flags.insert(Flags::READ_ONLY);
+    }
+    if attrs.contains(StatxAttributes::COMPRESSED) {
+        flags.insert(Flags::COMPRESSED);
+    }
+    if attrs.contains(StatxAttributes::ENCRYPTED) {
+        flags.insert(Flags::ENCRYPTED);
+    }
+    flags
+}
+
 impl Linux {
     fn entry(&self, name: &[u8], st: &Statx) -> RawEntry {
         let kind = kind_of(FileType::from_raw_mode(st.stx_mode.into()));
@@ -130,6 +150,7 @@ impl Linux {
         if kind == Kind::File && st.stx_nlink > 1 && !self.first_link(st) {
             flags.insert(Flags::HARDLINK_DUP);
         }
+        flags.insert(attribute_flags(st));
         RawEntry {
             name: name.to_vec(),
             info: EntryInfo {

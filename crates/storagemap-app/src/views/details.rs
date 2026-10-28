@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 
 use egui::{Response, Ui};
 use storagemap_core::analysis::extension_of;
-use storagemap_core::{Kind, NodeId, Tree};
+use storagemap_core::{Flags, Kind, NodeId, Tree};
 
 use super::table::{self, Col, TableSource};
 use super::{Env, ScanView, node_menu};
@@ -41,7 +41,7 @@ impl Default for Sort {
 }
 
 /// Columns in logical order and what each sorts by.
-const COLUMNS: [(Col, Option<SortBy>); 10] = [
+const COLUMNS: [(Col, Option<SortBy>); 11] = [
     (Col::flex("col-name"), Some(SortBy::Name)),
     (Col::fixed("col-size", 82.0, 1), Some(SortBy::Size)),
     (
@@ -55,7 +55,25 @@ const COLUMNS: [(Col, Option<SortBy>); 10] = [
     (Col::fixed("col-type", 76.0, 7), Some(SortBy::Type)),
     (Col::fixed("col-accessed", 88.0, 8), Some(SortBy::Accessed)),
     (Col::fixed("col-created", 88.0, 9), Some(SortBy::Created)),
+    (Col::fixed("col-attributes", 64.0, 10), None),
 ];
+
+/// Attribute letters, in the order shown: read-only, hidden, system,
+/// compressed, encrypted, sparse.
+pub fn attribute_letters(flags: Flags) -> String {
+    [
+        (Flags::READ_ONLY, 'R'),
+        (Flags::HIDDEN, 'H'),
+        (Flags::SYSTEM, 'S'),
+        (Flags::COMPRESSED, 'C'),
+        (Flags::ENCRYPTED, 'E'),
+        (Flags::SPARSE, 'P'),
+    ]
+    .into_iter()
+    .filter(|&(flag, _)| flags.contains(flag))
+    .map(|(_, letter)| letter)
+    .collect()
+}
 
 pub fn sorted_children(tree: &Tree, focus: NodeId, sort: Sort) -> Vec<NodeId> {
     let mut ids: Vec<NodeId> = tree.children(focus).collect();
@@ -140,6 +158,7 @@ impl TableSource for Source<'_> {
             6 => table::text(ui, env, &fmt::date(node.modified), true),
             8 => table::text(ui, env, &fmt::date(node.accessed), true),
             9 => table::text(ui, env, &fmt::date(node.created), true),
+            10 => table::text(ui, env, &attribute_letters(node.flags), true),
             _ => {
                 let ext = extension_of(self.tree.name_bytes(id));
                 let kind = if node.kind == Kind::File && !ext.is_empty() {

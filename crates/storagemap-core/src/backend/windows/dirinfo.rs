@@ -13,9 +13,9 @@ use std::path::{Path, PathBuf};
 
 use windows_sys::Win32::Foundation::ERROR_NO_MORE_FILES;
 use windows_sys::Win32::Storage::FileSystem::{
-    FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_REPARSE_POINT,
-    FILE_FLAG_BACKUP_SEMANTICS, FILE_ID_BOTH_DIR_INFO, FILE_LIST_DIRECTORY,
-    FileIdBothDirectoryInfo, GetFileInformationByHandleEx,
+    FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS,
+    FILE_ID_BOTH_DIR_INFO, FILE_LIST_DIRECTORY, FileIdBothDirectoryInfo,
+    GetFileInformationByHandleEx,
 };
 
 use super::{extended_path, open};
@@ -23,7 +23,7 @@ use crate::ScanError;
 use crate::filter::Matcher;
 use crate::ntfs::filetime_to_unix;
 use crate::progress::ScanProgress;
-use crate::tree::{EntryInfo, Flags, Kind, Tree};
+use crate::tree::{EntryInfo, Kind, Tree};
 use crate::walk::{self, Platform, RawEntry};
 
 /// Bytes per listing batch; u64 elements keep the buffer 8-byte aligned.
@@ -148,10 +148,7 @@ fn entry(info: &FILE_ID_BOTH_DIR_INFO, name: &[u16]) -> RawEntry {
         (true, false) => Kind::Dir,
         (false, _) => Kind::File,
     };
-    let mut flags = Flags::empty();
-    if attrs & FILE_ATTRIBUTE_HIDDEN != 0 {
-        flags.insert(Flags::HIDDEN);
-    }
+    let flags = super::attribute_flags(attrs);
     let name = OsString::from_wide(name)
         .to_string_lossy()
         .into_owned()

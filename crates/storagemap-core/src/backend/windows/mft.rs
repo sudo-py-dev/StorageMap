@@ -31,7 +31,6 @@ const CHUNK_BYTES: u64 = 8 * 1024 * 1024;
 /// Chunks buffered between the reader thread and the parser.
 const CHUNKS_IN_FLIGHT: usize = 4;
 const ATTR_DATA: u32 = 0x80;
-const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 
 #[derive(Debug, Clone, Copy)]
@@ -375,10 +374,7 @@ fn build(root: &Path, table: &Table, children: &Children, start: u32, filter: &M
             (true, false) => Kind::Dir,
             (false, _) => Kind::File,
         };
-        let mut flags = Flags::empty();
-        if m.attributes & FILE_ATTRIBUTE_HIDDEN != 0 {
-            flags.insert(Flags::HIDDEN);
-        }
+        let flags = super::attribute_flags(m.attributes);
         EntryInfo {
             kind,
             flags,

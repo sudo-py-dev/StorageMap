@@ -18,7 +18,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 
 use crate::backend::Backend;
 use crate::progress::ScanProgress;
-use crate::tree::Tree;
+use crate::tree::{Flags, Tree};
 use crate::{ScanError, ScanOptions};
 
 /// Room for `\\?\Volume{GUID}\` and long volume mount paths.
@@ -46,6 +46,31 @@ fn cancelled_tree(root: &Path) -> Tree {
     let mut info = crate::walk::dir_info(0, 0);
     info.flags.insert(crate::tree::Flags::INCOMPLETE);
     crate::tree::TreeBuilder::new(root.to_path_buf(), info).finish()
+}
+
+/// Flags for Win32 file attribute bits (shared by both Windows engines; the
+/// NTFS standard information attribute uses the same bits).
+pub(crate) fn attribute_flags(attrs: u32) -> Flags {
+    const READ_ONLY: u32 = 0x1;
+    const HIDDEN: u32 = 0x2;
+    const SYSTEM: u32 = 0x4;
+    const SPARSE: u32 = 0x200;
+    const COMPRESSED: u32 = 0x800;
+    const ENCRYPTED: u32 = 0x4000;
+    let mut flags = Flags::empty();
+    for (bit, flag) in [
+        (READ_ONLY, Flags::READ_ONLY),
+        (HIDDEN, Flags::HIDDEN),
+        (SYSTEM, Flags::SYSTEM),
+        (SPARSE, Flags::SPARSE),
+        (COMPRESSED, Flags::COMPRESSED),
+        (ENCRYPTED, Flags::ENCRYPTED),
+    ] {
+        if attrs & bit != 0 {
+            flags.insert(flag);
+        }
+    }
+    flags
 }
 
 /// NUL-terminated UTF-16 for Win32 calls.
@@ -114,4 +139,19 @@ pub(crate) fn volume_of(path: &Path) -> io::Result<(PathBuf, OsString)> {
 fn from_wide_nul(buf: &[u16]) -> OsString {
     let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
     OsString::from_wide(&buf[..len])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_attribute_bits() {
+        let flags = attribute_flags(0x1 | 0x2 | 0x800);
+        assert!(flags.contains(Flags::READ_ONLY));
+        assert!(flags.contains(Flags::HIDDEN));
+        assert!(flags.contains(Flags::COMPRESSED));
+        assert!(!flags.contains(Flags::SYSTEM));
+        assert_eq!(attribute_flags(0), Flags::empty());
+    }
 }
