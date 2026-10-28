@@ -301,7 +301,16 @@ pub enum Installed {
 
 /// Starts a fresh copy of the app (after an update was installed in place).
 pub fn relaunch() -> io::Result<()> {
-    Command::new(std::env::current_exe()?).spawn().map(drop)
+    Command::new(installed_exe(std::env::current_exe()?)).spawn().map(drop)
+}
+
+/// Once the package manager replaces the running binary, Linux reports its
+/// path as `/usr/bin/storagemap (deleted)`; the new file sits at the original path.
+fn installed_exe(exe: PathBuf) -> PathBuf {
+    match exe.to_str().and_then(|s| s.strip_suffix(" (deleted)")) {
+        Some(original) => PathBuf::from(original),
+        None => exe,
+    }
 }
 
 /// Removes installers left in the temp folder by earlier updates.
@@ -485,6 +494,14 @@ fn spawn(name: &str, f: impl FnOnce() + Send + 'static) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relaunches_the_replaced_binary() {
+        let deleted = PathBuf::from("/usr/bin/storagemap (deleted)");
+        assert_eq!(installed_exe(deleted), PathBuf::from("/usr/bin/storagemap"));
+        let normal = PathBuf::from("/usr/bin/storagemap");
+        assert_eq!(installed_exe(normal.clone()), normal);
+    }
 
     const JSON: &str = r#"{
         "tag_name": "v9.1.0", "html_url": "https://github.com/sudo-py-dev/StorageMap/releases/tag/v9.1.0",
