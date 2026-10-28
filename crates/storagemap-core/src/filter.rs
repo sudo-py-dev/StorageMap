@@ -109,7 +109,7 @@ fn normalise(s: &str) -> String {
 
 /// Wildcard match of `text` against `pattern` (`*` and `?`), iterative with
 /// single backtracking, so it is linear for typical patterns.
-fn glob(pattern: &str, text: &str) -> bool {
+pub(crate) fn glob(pattern: &str, text: &str) -> bool {
     let p: Vec<char> = pattern.chars().collect();
     let t: Vec<char> = text.chars().collect();
     let (mut pi, mut ti) = (0, 0);

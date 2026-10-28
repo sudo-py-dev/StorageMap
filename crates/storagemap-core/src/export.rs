@@ -99,27 +99,51 @@ pub fn write_tree(
         if tree.depth(id) - base_depth < max_depth {
             stack.extend(tree.children(id).rev());
         }
-        if !labels.include.accepts(node.kind) {
-            continue;
+        if labels.include.accepts(node.kind) {
+            write_row(tree, id, labels, writer)?;
         }
-        let kind = &labels.kinds[match node.kind {
-            Kind::Dir => 0,
-            Kind::File => 1,
-            Kind::Symlink => 2,
-            Kind::Other => 3,
-        }];
-        writer.row(&[
-            Value::Text(tree.path(id).to_string_lossy()),
-            Value::Text(Cow::Borrowed(kind)),
-            Value::Bytes(node.size),
-            Value::Bytes(node.allocated),
-            Value::Count(node.files),
-            Value::Count(node.dirs),
-            Value::Share(tree.share_of_parent(id, Metric::Size)),
-            Value::Date(node.modified),
-        ])?;
     }
     writer.finish()
+}
+
+/// Writes exactly the entries `ids` (search results, for example), in
+/// that order, with the same columns as [`write_tree`].
+pub fn write_entries(
+    tree: &Tree,
+    ids: &[NodeId],
+    labels: &ReportLabels,
+    writer: &mut dyn ReportWriter,
+) -> io::Result<()> {
+    writer.header(&labels.headers)?;
+    for &id in ids {
+        write_row(tree, id, labels, writer)?;
+    }
+    writer.finish()
+}
+
+fn write_row(
+    tree: &Tree,
+    id: NodeId,
+    labels: &ReportLabels,
+    writer: &mut dyn ReportWriter,
+) -> io::Result<()> {
+    let node = tree.node(id);
+    let kind = &labels.kinds[match node.kind {
+        Kind::Dir => 0,
+        Kind::File => 1,
+        Kind::Symlink => 2,
+        Kind::Other => 3,
+    }];
+    writer.row(&[
+        Value::Text(tree.path(id).to_string_lossy()),
+        Value::Text(Cow::Borrowed(kind)),
+        Value::Bytes(node.size),
+        Value::Bytes(node.allocated),
+        Value::Count(node.files),
+        Value::Count(node.dirs),
+        Value::Share(tree.share_of_parent(id, Metric::Size)),
+        Value::Date(node.modified),
+    ])
 }
 
 /// Delimited text: RFC 4180 CSV, or tab-separated text that pastes into
@@ -319,6 +343,19 @@ mod tests {
         write_tree(t, t.root(), 8, labels, &mut csv).expect("csv");
         drop(csv);
         String::from_utf8(buf).expect("utf8")
+    }
+
+    #[test]
+    fn writes_just_the_given_entries() {
+        let t = sample();
+        let file = t.find(std::path::Path::new("/r/d/f")).expect("file");
+        let mut buf = Vec::new();
+        let mut csv = Delimited::csv(&mut buf);
+        write_entries(&t, &[file], &ReportLabels::default(), &mut csv).expect("csv");
+        drop(csv);
+        let text = String::from_utf8(buf).expect("utf8");
+        assert_eq!(text.lines().count(), 2);
+        assert!(text.lines().nth(1).expect("row").contains(",file,"));
     }
 
     #[test]

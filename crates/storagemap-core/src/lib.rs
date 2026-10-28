@@ -10,6 +10,7 @@ pub mod export;
 mod filter;
 pub mod ntfs;
 mod progress;
+pub mod search;
 pub mod snapshot;
 pub mod source;
 mod tree;

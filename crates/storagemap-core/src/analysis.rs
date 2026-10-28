@@ -190,22 +190,6 @@ pub fn ages(tree: &Tree, root: NodeId, now: i64) -> [AgeStat; 7] {
     out
 }
 
-/// Entries below `root` whose name contains `query` (case-insensitive),
-/// largest first, at most `limit`.
-pub fn search(tree: &Tree, root: NodeId, query: &str, limit: usize) -> Vec<NodeId> {
-    let needle = query.trim().to_lowercase();
-    if needle.is_empty() {
-        return Vec::new();
-    }
-    let mut hits: Vec<NodeId> = tree
-        .walk(root)
-        .filter(|&id| id != root && tree.name(id).to_lowercase().contains(&needle))
-        .collect();
-    hits.sort_unstable_by_key(|&id| Reverse(tree.node(id).size));
-    hits.truncate(limit);
-    hits
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -304,12 +288,5 @@ mod tests {
         let a = ages(&t, t.root(), now);
         assert_eq!(a[0].files, 2); // modified 3 days ago
         assert_eq!(a[6].files, 2); // 1970
-    }
-
-    #[test]
-    fn search_is_case_insensitive() {
-        let t = sample();
-        assert_eq!(search(&t, t.root(), "pdf", 10).len(), 2);
-        assert!(search(&t, t.root(), "  ", 10).is_empty());
     }
 }
