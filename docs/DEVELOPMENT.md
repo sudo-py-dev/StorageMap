@@ -54,8 +54,7 @@ assets/                  icon sources (assets/make_icon.py regenerates them)
   pool. Hard links are counted once, and other filesystems are skipped unless
   you enable them.
 - **Windows, as administrator:** the NTFS Master File Table is read directly
-  in large sequential chunks while rayon parses the previous chunk, the same
-  technique TreeSize and WizTree use.
+  in large sequential chunks while rayon parses the previous chunk.
 - **Windows, otherwise:** directories are listed in 64 KiB batches with
   `GetFileInformationByHandleEx`, which returns sizes and times with the
   names.

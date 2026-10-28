@@ -22,7 +22,7 @@ const FIRST_LAUNCH_MAX: egui::Vec2 = egui::vec2(1680.0, 1050.0);
 const VOLUME_REFRESH: Duration = Duration::from_secs(5);
 /// Snapshots kept per scanned folder; older ones are pruned.
 const MAX_SNAPSHOTS_PER_FOLDER: usize = 30;
-/// Depth exported to CSV (TreeSize-style: folders and files a few levels deep).
+/// Folder depth exported to CSV.
 const CSV_EXPORT_DEPTH: usize = 64;
 
 /// Something the user asked for; applied after the frame is drawn.

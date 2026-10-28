@@ -2,8 +2,8 @@
 //!
 //! Instead of asking the filesystem about every directory, read the `$MFT`
 //! sequentially in large chunks and reconstruct the hierarchy from parent
-//! references — the technique TreeSize and WizTree use. A reader thread keeps
-//! the disk busy while rayon parses the previous chunk.
+//! references. A reader thread keeps the disk busy while rayon parses the
+//! previous chunk.
 
 use std::collections::VecDeque;
 use std::ffi::OsStr;

@@ -81,7 +81,7 @@ pub struct Node {
     pub kind: Kind,
     pub flags: Flags,
     /// Last modification, seconds since the Unix epoch. For directories this
-    /// is the newest modification anywhere below (like TreeSize).
+    /// is the newest modification anywhere below.
     pub modified: i64,
     /// Logical size; aggregated for directories.
     pub size: u64,
