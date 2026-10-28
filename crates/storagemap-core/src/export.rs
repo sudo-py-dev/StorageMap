@@ -259,8 +259,13 @@ mod tests {
                 .map(|l| l.split(',').next().unwrap_or("").to_owned())
                 .collect::<Vec<_>>()
         };
-        assert_eq!(only(Include::Folders), ["/r", "/r/d"]);
-        assert_eq!(only(Include::Files), ["/r/d/f"]);
+        // Paths use the platform's separator (`\\` on Windows).
+        let sep = std::path::MAIN_SEPARATOR;
+        assert_eq!(
+            only(Include::Folders),
+            ["/r".to_owned(), format!("/r{sep}d")]
+        );
+        assert_eq!(only(Include::Files), [format!("/r{sep}d{sep}f")]);
         assert_eq!(only(Include::All).len(), 3);
     }
 }
