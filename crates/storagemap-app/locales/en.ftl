@@ -174,6 +174,8 @@ view-decimals = Decimals
 treemap-depth = Treemap detail
 treemap-files = Show files in treemap
 treemap-labels = Show labels
+highlight-large = Highlight large items
+setting-highlight-large-hint = Colour the names of files and folders that take up a large share of their folder.
 option-cross-fs = Also scan other mounted filesystems
 option-mft = Fast NTFS scan (MFT)
 

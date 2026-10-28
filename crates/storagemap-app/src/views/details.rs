@@ -124,7 +124,13 @@ impl TableSource for Source<'_> {
                 } else {
                     crate::icons::FILE
                 };
-                table::text(ui, env, &format!("{icon} {}", self.tree.name(id)), false);
+                let name = format!("{icon} {}", self.tree.name(id));
+                if env.is_large(self.tree, id) {
+                    let color = crate::theme::large_text(ui.visuals());
+                    table::colored(ui, env, &name, false, color);
+                } else {
+                    table::text(ui, env, &name, false);
+                }
             }
             1 => table::text(ui, env, &env.size(node.size), true),
             2 => table::text(ui, env, &env.size(node.allocated), true),

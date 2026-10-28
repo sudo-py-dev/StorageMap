@@ -176,6 +176,8 @@ view-decimals = ספרות אחרי הנקודה
 treemap-depth = רמת פירוט מפת העץ
 treemap-files = הצגת קבצים במפת העץ
 treemap-labels = הצגת תוויות
+highlight-large = הדגשת פריטים גדולים
+setting-highlight-large-hint = צביעת השמות של קבצים ותיקיות שתופסים חלק גדול מהתיקייה שלהם.
 option-cross-fs = לסרוק גם מערכות קבצים מעוגנות אחרות
 option-mft = סריקת NTFS מהירה (MFT)
 

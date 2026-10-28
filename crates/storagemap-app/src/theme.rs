@@ -10,6 +10,19 @@ use egui::{
 pub const ACCENT: Color32 = Color32::from_rgb(37, 99, 235);
 pub const ACCENT_BRIGHT: Color32 = Color32::from_rgb(96, 165, 250);
 pub const SUCCESS: Color32 = Color32::from_rgb(34, 160, 95);
+/// Names of unusually large items, dark and light theme.
+const LARGE_DARK: Color32 = Color32::from_rgb(251, 191, 36);
+const LARGE_LIGHT: Color32 = Color32::from_rgb(180, 83, 9);
+
+/// Text colour that marks an unusually large item.
+pub fn large_text(visuals: &Visuals) -> Color32 {
+    if visuals.dark_mode {
+        LARGE_DARK
+    } else {
+        LARGE_LIGHT
+    }
+}
+
 /// Seconds for hover/expand/fade animations.
 pub const ANIMATION_TIME: f32 = 0.16;
 pub const RADIUS: u8 = 6;

@@ -55,6 +55,8 @@ pub struct Settings {
     pub treemap_depth: u8,
     pub treemap_files: bool,
     pub treemap_labels: bool,
+    /// Colour the names of items that take an unusually large share.
+    pub highlight_large: bool,
     pub cross_filesystems: bool,
     pub prefer_mft: bool,
     pub recent: Vec<PathBuf>,
@@ -93,6 +95,7 @@ impl Default for Settings {
             treemap_depth: 6,
             treemap_files: true,
             treemap_labels: true,
+            highlight_large: true,
             cross_filesystems: false,
             prefer_mft: true,
             recent: Vec::new(),

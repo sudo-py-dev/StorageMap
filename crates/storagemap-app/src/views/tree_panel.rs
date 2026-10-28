@@ -225,7 +225,13 @@ fn paint_row(
     let flagged = node.flags.contains(Flags::ERROR)
         || node.flags.contains(Flags::INCOMPLETE)
         || node.flags.contains(Flags::MOUNT_POINT);
-    let name_color = if flagged { weak } else { text_color };
+    let name_color = if flagged {
+        weak
+    } else if !selected && env.is_large(tree, row.id) {
+        crate::theme::large_text(visuals)
+    } else {
+        text_color
+    };
     paint_text(
         &painter,
         env.i18n,

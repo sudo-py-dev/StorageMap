@@ -33,7 +33,25 @@ pub struct Env<'a> {
     pub actions: &'a mut Vec<Action>,
 }
 
+/// Share of its folder above which an item stands out.
+const LARGE_SHARE_OF_PARENT: f64 = 0.25;
+/// ...as long as it is also this much of the whole scan, so a big file in a
+/// tiny folder does not.
+const LARGE_SHARE_OF_SCAN: f64 = 0.02;
+
 impl Env<'_> {
+    /// Whether `id` should be highlighted as unusually large.
+    pub fn is_large(&self, tree: &Tree, id: NodeId) -> bool {
+        let metric = self.settings.metric;
+        self.settings.highlight_large
+            && id != tree.root()
+            && tree.share_of_parent(id, metric) >= LARGE_SHARE_OF_PARENT
+            && storagemap_core::ratio(
+                tree.node(id).metric(metric),
+                tree.node(tree.root()).metric(metric),
+            ) >= LARGE_SHARE_OF_SCAN
+    }
+
     /// Translated, display-ready text.
     pub fn t(&self, id: &str) -> String {
         self.i18n.t(id)

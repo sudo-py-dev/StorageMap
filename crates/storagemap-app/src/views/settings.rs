@@ -269,6 +269,15 @@ fn appearance(ui: &mut Ui, i18n: &I18n, settings: &mut Settings, ctx: &egui::Con
     row(ui, i18n, "treemap-labels", None, |ui| {
         toggle(ui, &mut settings.treemap_labels, i18n.is_rtl());
     });
+    row(
+        ui,
+        i18n,
+        "highlight-large",
+        Some("setting-highlight-large-hint"),
+        |ui| {
+            toggle(ui, &mut settings.highlight_large, i18n.is_rtl());
+        },
+    );
 }
 
 fn scanning(

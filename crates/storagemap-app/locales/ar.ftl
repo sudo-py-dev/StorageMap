@@ -185,6 +185,8 @@ view-decimals = المنازل العشرية
 treemap-depth = تفاصيل الخريطة الشجرية
 treemap-files = إظهار الملفات في الخريطة
 treemap-labels = إظهار التسميات
+highlight-large = إبراز العناصر الكبيرة
+setting-highlight-large-hint = تلوين أسماء الملفات والمجلدات التي تشغل حصة كبيرة من مجلدها.
 option-cross-fs = فحص أنظمة الملفات المركّبة الأخرى أيضًا
 option-mft = فحص NTFS السريع (MFT)
 
