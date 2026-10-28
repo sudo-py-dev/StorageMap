@@ -29,26 +29,69 @@ since last time.
 
 ## Features
 
+**See where the space went**
+
 - **Fast scans.** On Linux it reads many folders in parallel. On Windows,
   run as administrator, it reads the NTFS file table directly, which is
   usually many times faster than listing folders one by one.
+- **Browse while it scans.** Finished folders appear right away; the rest
+  fill in as the scan goes on.
+- **Several scans at once.** Every scanned folder or drive opens in its own
+  tab, and rescanning keeps your place.
 - **Treemap.** Every file is a rectangle sized by how much space it takes,
   coloured by type: video, images, audio, archives, documents, code and
   more. Double-click a folder to zoom in.
+- **Charts.** A donut or bar chart of the biggest items in any folder.
 - **Folder tree and details.** Folders sorted by size with share bars, plus
-  a sortable table with size, size on disk, file counts and dates.
+  a sortable table with size, size on disk, file counts, modified, created
+  and last-opened dates, attributes and owner. Unusually large items stand
+  out. Right-click a column header to hide, show or reorder columns.
+- **Filter the folder tree** to one kind of file (video, documents,
+  programs…), one age, or one owner, and see only where those files are.
+- **Largest files, file types, age and owners.** See which files are
+  biggest, which kinds use the most space, how much of it is years old, and
+  which user it belongs to (Linux).
+
+**Find things**
+
+- **Search** by name or pattern (`*.iso`) and filter by type, size, date,
+  owner or attribute, or search with filters alone, for example every file
+  over 1 GB not changed for two years. Save searches you use often, and
+  search all open scans at once.
+- **Duplicate finder.** Finds files with identical content and shows how
+  much space removing the extra copies would free, with optional SHA-256
+  checksums.
+
+**Free space and tidy up**
+
 - **Cleanup suggestions.** Finds space that is usually safe to free: the
   trash, application caches, build output such as `node_modules`,
   package-manager caches, temporary files, huge logs, crash dumps and large
   downloads you haven't touched in six months.
-- **What changed.** Each scan is saved as a snapshot, so scanning the same
-  folder again shows exactly what grew, shrank, appeared or disappeared.
-- **Duplicate finder.** Finds files with identical content and shows how
-  much space removing the extra copies would free.
-- **Largest files, file types and age.** See which files are biggest, which
-  kinds of files use the most space, and how much of it is years old.
+- **Act on many files at once.** Mark files with tick boxes, by hand or from
+  a search, then move, copy, zip, rename (find and replace, previewed first)
+  or move them to the trash together.
+- **Deal with duplicates.** Keep the newest, oldest or shortest-path copy and
+  move the rest to the trash, or replace them with hard links so the data is
+  stored only once. Every change is listed for you before it happens.
 - **Safe by design.** Nothing is ever deleted outright. Files go to the
-  Recycle Bin or Trash after you confirm, so you can always restore them.
+  Recycle Bin or Trash after you confirm, so you can always restore them,
+  and moving or copying never overwrites anything.
+
+**Track growth and share results**
+
+- **What changed.** Each scan is saved, so scanning the same folder again
+  shows exactly what grew, shrank, appeared or disappeared. Open any saved
+  scan to browse the folder as it was, and compare any two.
+- **Reports.** Export to Excel, CSV, a web page (which prints to PDF), JSON
+  or text, choosing the folder depth, the columns and which rows to include,
+  or copy a table to paste into a spreadsheet.
+- **Leave things out.** Skip folders or files by name or path pattern (such
+  as `node_modules` or `*.iso`) in every scan, or count only the files you
+  care about.
+
+**Made to fit in**
+
 - **Your language.** English, Hebrew and Arabic, with a fully mirrored
   right-to-left layout.
 - **Light and dark themes**, adjustable interface size, keyboard shortcuts,
@@ -97,13 +140,27 @@ applications menu and in "Open With" for folders.
    in the tree on the side to look inside, or double-click a rectangle to
    zoom in.
 3. **Free space.** Open the *Cleanup* tab for suggestions, or right-click
-   any file or folder and choose *Move to trash*.
+   any file or folder and choose *Move to trash*. To act on many files,
+   tick them (or Ctrl-click them) and use the bar that appears.
 4. **Come back later.** Scan the same folder again and open *Changes* to see
-   what grew.
+   what grew, or open an older saved scan from *File → Open saved scan*.
 
 Right-clicking any item also lets you open it, show it in your file manager
 or copy its path. All shortcuts are listed in *Settings → Keyboard
 shortcuts*.
+
+### Command line
+
+StorageMap can also scan without opening a window, for scripts and
+scheduled reports:
+
+```bash
+storagemap --cli /home --top 10 --report home.xlsx --exclude node_modules
+```
+
+`--report` picks the format from the file name (`.csv`, `.xlsx`, `.html`,
+`.json` or `.txt`). Run `storagemap --help` for every option. Opening a
+saved scan works too: `storagemap scan.smap`.
 
 ## Privacy
 

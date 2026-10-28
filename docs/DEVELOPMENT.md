@@ -21,11 +21,13 @@ desktop distributions already ship. Build for Windows on Windows (MSVC).
 ### Command line
 
 ```
-storagemap --cli PATH [--top N] [--csv FILE] [--depth N] [--allocated] [--cross-fs] [--no-mft]
+storagemap --cli PATH [--top N] [--csv FILE] [--report FILE] [--depth N]
+                [--allocated] [--cross-fs] [--no-mft] [--exclude PAT]... [--include PAT]...
 ```
 
-It prints totals, the largest entries and the largest files; with `--csv`
-it also writes a full report.
+It prints totals, the largest entries and the largest files. With `--csv`
+or `--report` it also writes a full report; `--report` picks the format from
+the extension (`.csv`, `.xlsx`, `.html`, `.json`, `.txt`).
 
 ## Layout
 
