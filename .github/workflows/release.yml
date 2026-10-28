@@ -57,7 +57,7 @@ jobs:
       - name: Attest build provenance
         # Attestations need a public repository (or GitHub Enterprise).
         if: ${{ !github.event.repository.private }}
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: target/installer/*
       - name: Upload assets
@@ -84,7 +84,7 @@ jobs:
           tar -C target/release -czf "dist/StorageMap-$VERSION-linux-x86_64.tar.gz" storagemap
       - name: Attest build provenance
         if: ${{ !github.event.repository.private }}
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*
       - name: Upload assets
