@@ -166,6 +166,11 @@ impl<K: PartialEq, V: Default> Default for Cached<K, V> {
 }
 
 impl<K: PartialEq, V> Cached<K, V> {
+    /// The value as last computed by [`Cached::get`].
+    pub fn value(&self) -> &V {
+        &self.value
+    }
+
     pub fn get(&mut self, key: K, compute: impl FnOnce() -> V) -> &V {
         if self.key.as_ref() != Some(&key) {
             self.value = compute();
@@ -204,7 +209,10 @@ pub struct ScanView {
     pub details_sort: details::Sort,
     pub context_target: Option<NodeId>,
     pub treemap: treemap::Cache,
-    pub(super) tree_rows: Cached<(Metric, u64, u64), Vec<tree_panel::Row>>,
+    pub(super) tree_rows: Cached<(Metric, u64, u64, tree_panel::TreeFilter), Vec<tree_panel::Row>>,
+    /// Which files the folder tree counts.
+    pub tree_filter: tree_panel::TreeFilter,
+    pub(super) filtered: Cached<(tree_panel::TreeFilter, Metric, u64), Vec<u64>>,
     pub(super) expansion_version: u64,
     pub(super) top_files: Cached<AnalysisKey, Vec<NodeId>>,
     pub(super) types: Cached<AnalysisKey, Vec<ExtensionStat>>,
@@ -247,6 +255,8 @@ impl ScanView {
             context_target: None,
             treemap: treemap::Cache::default(),
             tree_rows: Cached::default(),
+            tree_filter: tree_panel::TreeFilter::default(),
+            filtered: Cached::default(),
             expansion_version: 0,
             top_files: Cached::default(),
             types: Cached::default(),

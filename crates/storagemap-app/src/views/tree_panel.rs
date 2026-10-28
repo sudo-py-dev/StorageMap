@@ -4,10 +4,12 @@
 use std::collections::HashSet;
 
 use egui::{FontId, Rect, Role, Sense, Ui, Vec2, WidgetInfo};
-use storagemap_core::{Flags, Metric, NodeId, Tree};
+use storagemap_core::analysis::{AgeBucket, extension_of};
+use storagemap_core::{Flags, Kind, Metric, NodeId, Tree};
 
 use super::{Env, ScanView, node_menu};
 use crate::app::Action;
+use crate::filetype::Category;
 use crate::widgets::{paint_text, row, share_bar};
 
 const ROW_HEIGHT: f32 = 22.0;
@@ -16,6 +18,57 @@ const ARROW_WIDTH: f32 = 16.0;
 const BAR_WIDTH: f32 = 44.0;
 const VALUE_WIDTH: f32 = 78.0;
 const GAP: f32 = 6.0;
+
+/// Which files the folder tree counts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TreeFilter {
+    #[default]
+    All,
+    Type(Category),
+    Age(AgeBucket),
+}
+
+impl TreeFilter {
+    fn matches(self, tree: &Tree, id: NodeId, now: i64) -> bool {
+        match self {
+            TreeFilter::All => true,
+            TreeFilter::Type(cat) => {
+                Category::of_extension(&extension_of(tree.name_bytes(id))) == cat
+            }
+            TreeFilter::Age(bucket) => {
+                AgeBucket::of(now.saturating_sub(tree.node(id).modified).max(0)) == bucket
+            }
+        }
+    }
+
+    fn label(self, env: &Env<'_>) -> String {
+        match self {
+            TreeFilter::All => env.t("tree-filter-all"),
+            TreeFilter::Type(cat) => env.t(cat.label_id()),
+            TreeFilter::Age(bucket) => env.t(super::lists::age_label_id(bucket)),
+        }
+    }
+}
+
+/// Per-node totals of the files `filter` keeps, indexed by node.
+pub fn filtered_values(tree: &Tree, filter: TreeFilter, metric: Metric, now: i64) -> Vec<u64> {
+    let mut values = vec![0u64; tree.len()];
+    let order: Vec<NodeId> = tree.walk(tree.root()).collect();
+    // Pre-order: walking it backwards finishes children before parents.
+    for &id in order.iter().rev() {
+        let node = tree.node(id);
+        if node.kind != Kind::Dir
+            && !node.flags.contains(Flags::HARDLINK_DUP)
+            && filter.matches(tree, id, now)
+        {
+            values[id.index()] = node.metric(metric);
+        }
+        if let Some(parent) = tree.parent(id) {
+            values[parent.index()] += values[id.index()];
+        }
+    }
+    values
+}
 
 /// One visible folder row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,13 +80,21 @@ pub struct Row {
 }
 
 /// Flattens the expanded part of the folder hierarchy, largest first.
-pub fn build_rows(tree: &Tree, expanded: &HashSet<NodeId>, metric: Metric) -> Vec<Row> {
+/// With `values`, folders holding nothing the filter keeps are left out and
+/// the rest are sorted by the filtered value.
+pub fn build_rows(
+    tree: &Tree,
+    expanded: &HashSet<NodeId>,
+    metric: Metric,
+    values: Option<&[u64]>,
+) -> Vec<Row> {
     let mut rows = Vec::new();
     let mut stack = vec![(tree.root(), 0u16)];
     while let Some((id, depth)) = stack.pop() {
         let mut dirs: Vec<NodeId> = tree
             .children(id)
             .filter(|&c| tree.node(c).is_dir())
+            .filter(|&c| values.is_none_or(|v| v[c.index()] > 0))
             .collect();
         let is_open = expanded.contains(&id);
         rows.push(Row {
@@ -43,7 +104,9 @@ pub fn build_rows(tree: &Tree, expanded: &HashSet<NodeId>, metric: Metric) -> Ve
             expanded: is_open,
         });
         if is_open {
-            if metric != Metric::Size {
+            if let Some(v) = values {
+                dirs.sort_by_key(|&d| std::cmp::Reverse(v[d.index()]));
+            } else if metric != Metric::Size {
                 dirs.sort_by_key(|&d| std::cmp::Reverse(tree.node(d).metric(metric)));
             }
             stack.extend(dirs.into_iter().rev().map(|d| (d, depth.saturating_add(1))));
@@ -52,25 +115,53 @@ pub fn build_rows(tree: &Tree, expanded: &HashSet<NodeId>, metric: Metric) -> Ve
     rows
 }
 
+/// Brings the cached rows (and filtered values, when a filter is active)
+/// up to date; read them with [`rows`] and [`values`].
+pub fn refresh(scan: &mut ScanView, metric: Metric) {
+    let filter = scan.tree_filter;
+    let tree = &scan.tree;
+    let values: Option<&[u64]> = (filter != TreeFilter::All).then(|| {
+        let now = crate::fmt::now_unix();
+        scan.filtered
+            .get((filter, metric, scan.generation), || {
+                filtered_values(tree, filter, metric, now)
+            })
+            .as_slice()
+    });
+    let key = (metric, scan.generation, scan.expansion_version, filter);
+    scan.tree_rows
+        .get(key, || build_rows(tree, &scan.expanded, metric, values));
+}
+
+/// The visible rows as of the last [`refresh`].
+pub fn rows(scan: &ScanView) -> &[Row] {
+    scan.tree_rows.value()
+}
+
 /// Draws the panel; returns nothing — intents go to `env`.
 pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
-    let metric = env.settings.metric;
-    let key = (metric, scan.generation, scan.expansion_version);
-    let rows = scan
-        .tree_rows
-        .get(key, || build_rows(&scan.tree, &scan.expanded, metric));
+    let filter = scan.tree_filter;
+    refresh(scan, env.settings.metric);
+    let rows = &scan.tree_rows.value()[..];
+    let values = (filter != TreeFilter::All).then(|| scan.filtered.value().as_slice());
     let tree = &scan.tree;
 
     let mut collapse = false;
+    let mut new_filter = None;
     let root = tree.node(tree.root());
+    let root_text = match values {
+        Some(v) => env.metric_value_text(v[tree.root().index()]),
+        None => env.metric_text(root),
+    };
     row(ui, env.i18n.dir(), |ui| {
         ui.label(
-            egui::RichText::new(env.i18n.v(&env.metric_text(root)))
+            egui::RichText::new(env.i18n.v(&root_text))
                 .strong()
                 .size(17.0),
         );
         ui.with_layout(env.i18n.dir().end_row(), |ui| {
             collapse = ui.small_button(env.t("action-collapse-all")).clicked();
+            new_filter = filter_menu(ui, env, filter);
         });
     });
     // Counts get their own line, elided rather than colliding with the button.
@@ -102,7 +193,8 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         for row in &rows[range] {
             let (rect, _) = ui
                 .allocate_exact_size(egui::vec2(ui.available_width(), ROW_HEIGHT), Sense::hover());
-            if let Some(id) = paint_row(ui, env, tree, row, rect, scan.selected == Some(row.id)) {
+            let selected = scan.selected == Some(row.id);
+            if let Some(id) = paint_row(ui, env, tree, values, row, rect, selected) {
                 toggle = Some(id);
             }
         }
@@ -114,6 +206,39 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     if collapse {
         scan.collapse_all();
     }
+    if let Some(f) = new_filter {
+        scan.tree_filter = f;
+    }
+}
+
+/// A drop-down choosing which files the tree counts; returns a new choice.
+fn filter_menu(ui: &mut Ui, env: &Env<'_>, current: TreeFilter) -> Option<TreeFilter> {
+    let mut chosen = None;
+    let text = format!("{}  {}", crate::icons::FILTER, current.label(env));
+    egui::ComboBox::from_id_salt("tree-filter")
+        .selected_text(egui::RichText::new(text).small())
+        .width(130.0)
+        .truncate()
+        .height(480.0)
+        .show_ui(ui, |ui| {
+            let mut option = |ui: &mut Ui, f: TreeFilter| {
+                if ui.selectable_label(current == f, f.label(env)).clicked() {
+                    chosen = Some(f);
+                }
+            };
+            option(ui, TreeFilter::All);
+            ui.separator();
+            ui.label(egui::RichText::new(env.t("tree-filter-types")).weak());
+            for cat in Category::ALL {
+                option(ui, TreeFilter::Type(cat));
+            }
+            ui.separator();
+            ui.label(egui::RichText::new(env.t("tree-filter-modified")).weak());
+            for bucket in AgeBucket::ALL {
+                option(ui, TreeFilter::Age(bucket));
+            }
+        });
+    chosen.filter(|&f| f != current)
 }
 
 /// A disclosure triangle that rotates smoothly between closed (pointing to
@@ -155,6 +280,7 @@ fn paint_row(
     ui: &mut Ui,
     env: &mut Env<'_>,
     tree: &Tree,
+    values: Option<&[u64]>,
     row: &Row,
     rect: Rect,
     selected: bool,
@@ -199,7 +325,11 @@ fn paint_row(
         indent + ARROW_WIDTH,
         BAR_WIDTH,
     );
-    let share = tree.share_of_parent(row.id, env.settings.metric);
+    let share = match (values, tree.parent(row.id)) {
+        (Some(v), Some(p)) => storagemap_core::ratio(v[row.id.index()], v[p.index()]),
+        (Some(_), None) => 1.0,
+        (None, _) => tree.share_of_parent(row.id, env.settings.metric),
+    };
     share_bar(
         &painter,
         dir,
@@ -214,7 +344,10 @@ fn paint_row(
         &painter,
         env.i18n,
         value_rect,
-        &env.metric_text(node),
+        &match values {
+            Some(v) => env.metric_value_text(v[row.id.index()]),
+            None => env.metric_text(node),
+        },
         font.clone(),
         weak,
         true,
@@ -259,4 +392,47 @@ fn paint_row(
     response.context_menu(|ui| node_menu::show(ui, env, tree, row.id));
     response.on_hover_ui(|ui| node_menu::tooltip(ui, env, tree, row.id));
     toggle
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use storagemap_core::{EntryInfo, TreeBuilder};
+
+    #[test]
+    fn filter_counts_only_matching_files_and_hides_empty_folders() {
+        let dir = EntryInfo {
+            kind: Kind::Dir,
+            flags: Flags::empty(),
+            modified: 0,
+            accessed: 0,
+            created: 0,
+            size: 0,
+            allocated: 0,
+        };
+        let file = |size| EntryInfo {
+            kind: Kind::File,
+            size,
+            ..dir
+        };
+        let mut b = TreeBuilder::new(PathBuf::from("/r"), dir);
+        let videos = b.push(NodeId::ROOT, b"videos", dir);
+        b.push(videos, b"a.mp4", file(100));
+        b.push(videos, b"notes.txt", file(5));
+        let docs = b.push(NodeId::ROOT, b"docs", dir);
+        b.push(docs, b"b.pdf", file(50));
+        let t = b.finish();
+
+        let filter = TreeFilter::Type(Category::Video);
+        let values = filtered_values(&t, filter, Metric::Size, 0);
+        let videos = t.find(std::path::Path::new("/r/videos")).expect("videos");
+        assert_eq!(values[t.root().index()], 100);
+        assert_eq!(values[videos.index()], 100);
+
+        let expanded = HashSet::from([t.root()]);
+        let rows = build_rows(&t, &expanded, Metric::Size, Some(&values));
+        let ids: Vec<NodeId> = rows.iter().map(|r| r.id).collect();
+        assert_eq!(ids, [t.root(), videos]);
+    }
 }

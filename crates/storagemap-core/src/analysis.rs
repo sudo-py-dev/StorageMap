@@ -102,7 +102,8 @@ impl AgeBucket {
         AgeBucket::Older,
     ];
 
-    fn of(age_secs: i64) -> AgeBucket {
+    /// The bucket for something last modified `age_secs` ago.
+    pub fn of(age_secs: i64) -> AgeBucket {
         const DAY: i64 = 86_400;
         match age_secs {
             a if a < 7 * DAY => AgeBucket::Week,

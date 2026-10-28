@@ -170,7 +170,7 @@ const AGE_COLUMNS: [Col; 4] = [
     Col::fixed("col-files", 80.0, 3),
 ];
 
-fn age_label_id(bucket: AgeBucket) -> &'static str {
+pub fn age_label_id(bucket: AgeBucket) -> &'static str {
     match bucket {
         AgeBucket::Week => "age-week",
         AgeBucket::Month => "age-month",

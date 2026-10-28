@@ -1110,10 +1110,8 @@ pub fn keyboard(app: &mut App, ctx: &egui::Context) {
     if !(down || up || open || close) {
         return;
     }
-    let cache_key = (metric, scan.generation, scan.expansion_version);
-    let rows = scan.tree_rows.get(cache_key, || {
-        tree_panel::build_rows(&scan.tree, &scan.expanded, metric)
-    });
+    tree_panel::refresh(scan, metric);
+    let rows = tree_panel::rows(scan);
     let Some(index) = rows.iter().position(|r| r.id == selected) else {
         return;
     };
