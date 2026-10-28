@@ -175,7 +175,14 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         sorted_children(tree, focus, sort)
     });
     if rows.is_empty() {
-        ui.weak(env.t("empty-folder"));
+        crate::widgets::empty_state(
+            ui,
+            env.i18n,
+            "📭",
+            "empty-folder",
+            "empty-folder-hint",
+            |_| {},
+        );
         return;
     }
     let cols: Vec<Col> = COLUMNS.iter().map(|(c, _)| *c).collect();

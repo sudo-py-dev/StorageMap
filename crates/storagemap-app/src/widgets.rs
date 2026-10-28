@@ -171,12 +171,56 @@ pub fn elided_label(ui: &mut Ui, i18n: &I18n, logical: &str, color: Color32) -> 
     response.on_hover_text(i18n.v(logical))
 }
 
+/// A centred placeholder for views with nothing to show yet: a large icon,
+/// a title and an explanation, plus an optional call to action.
+pub fn empty_state(
+    ui: &mut Ui,
+    i18n: &I18n,
+    icon: &str,
+    title_id: &str,
+    body_id: &str,
+    add: impl FnOnce(&mut Ui),
+) {
+    ui.add_space((ui.available_height() * 0.12).min(60.0));
+    ui.vertical_centered(|ui| {
+        ui.set_max_width(520.0);
+        ui.label(egui::RichText::new(icon).size(44.0));
+        ui.add_space(6.0);
+        ui.label(egui::RichText::new(i18n.t(title_id)).size(18.0).strong());
+        ui.add_space(4.0);
+        let body = i18n.v(&i18n.logical(body_id));
+        let weak = ui.visuals().weak_text_color();
+        ui.add(egui::Label::new(egui::RichText::new(body).color(weak)).wrap());
+        ui.add_space(10.0);
+        add(ui);
+    });
+}
+
+/// A wrapped paragraph in small, weak text (hints and explanations).
+pub fn paragraph_small(ui: &mut Ui, i18n: &I18n, logical: &str) -> Response {
+    ui.scope(|ui| {
+        let small = egui::TextStyle::Small.resolve(ui.style());
+        ui.style_mut().override_font_id = Some(small);
+        let weak = ui.visuals().weak_text_color();
+        ui.visuals_mut().override_text_color = Some(weak);
+        paragraph(ui, i18n, logical)
+    })
+    .inner
+}
+
 /// A wrapped paragraph. Lines are broken in logical order, then each line
 /// is reordered, so RTL paragraphs read top-to-bottom correctly.
 pub fn paragraph(ui: &mut Ui, i18n: &I18n, logical: &str) -> Response {
-    let font = egui::TextStyle::Body.resolve(ui.style());
+    let font = ui
+        .style()
+        .override_font_id
+        .clone()
+        .unwrap_or_else(|| egui::TextStyle::Body.resolve(ui.style()));
     let width = ui.available_width().max(40.0);
-    let color = ui.visuals().text_color();
+    let color = ui
+        .visuals()
+        .override_text_color
+        .unwrap_or_else(|| ui.visuals().text_color());
     let painter = ui.painter().clone();
     let measure = |s: &str| {
         painter

@@ -12,7 +12,15 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, tree: &Tree, id: NodeId) {
     ui.with_layout(Layout::top_down_justified(dir.start()), |ui| {
         let node = tree.node(id);
         let mut item = |ui: &mut Ui, label: &str, action: Action| {
-            if ui.button(env.t(label)).clicked() {
+            let icon = match label {
+                "action-scan-this" => "🔍",
+                "action-open" => "📂",
+                "action-show-in-folder" => "🗂",
+                "action-copy-path" => "📋",
+                "action-trash" => "🗑",
+                _ => "",
+            };
+            if ui.button(format!("{icon}  {}", env.t(label))).clicked() {
                 env.push(action);
                 ui.close();
             }

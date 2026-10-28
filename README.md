@@ -48,6 +48,18 @@ right-to-left support.
   - Hard links are ignored, since they already share space.
   - Results show reclaimable space, and every copy offers open, show and
     trash.
+- **Cleanup suggestions:** finds space that is usually safe to reclaim —
+  trash, application caches, build output (`node_modules`, Rust `target`
+  next to a `Cargo.toml`), package-manager caches, temp folders, huge logs,
+  crash dumps and large downloads untouched for six months. Every item is
+  reviewed and moved to the trash, never deleted outright.
+- **Installers and auto-update:** an Inno Setup installer for Windows (per
+  user, no admin needed) and a `.deb` for Debian/Ubuntu. The app checks
+  GitHub Releases once a day (can be turned off), shows the release notes,
+  verifies the download against `SHA256SUMS`, then installs and relaunches.
+- **Polished UI:** light and dark themes, adjustable interface size,
+  animated tabs, treemap zoom and toasts, a settings window with keyboard
+  shortcuts, and the window sized to the screen on first launch.
 - **CLI:** `storagemap --cli PATH [--top N] [--csv FILE] [--allocated]` for
   scripts and benchmarks.
 
@@ -67,6 +79,22 @@ On Linux, egui needs the usual windowing libraries (X11/Wayland and
 xkbcommon), which desktop distributions already ship. To build for Windows,
 build on Windows (MSVC), or cross-compile with `cargo build --release --target
 x86_64-pc-windows-gnu` with MinGW installed.
+
+## Releasing
+
+1. Bump `version` in the workspace `Cargo.toml` and commit.
+2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+
+The *Release* workflow then:
+- creates a **draft** release;
+- builds the Windows installer and portable zip and the Linux `.deb` and
+  tarball, with build-provenance attestations when the repository is public;
+- uploads `SHA256SUMS`;
+- publishes the release only once every asset is in place, so the updater
+  never sees a half-finished release.
+
+The updater reads GitHub's public API, so it only finds releases once the
+repository (or at least its releases) is public.
 
 ## Layout
 

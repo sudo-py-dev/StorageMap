@@ -12,7 +12,7 @@ use crate::app::Action;
 use crate::filetype::Category;
 use crate::fmt;
 use crate::i18n::{Direction, bidi};
-use crate::widgets::row;
+use crate::widgets::{empty_state, row};
 
 const TOP_FILES: usize = 500;
 const SEARCH_LIMIT: usize = 2_000;
@@ -261,6 +261,7 @@ pub fn search(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     }
     let query = scan.search_query.trim().to_owned();
     if query.is_empty() {
+        empty_state(ui, env.i18n, "🔍", "tab-search", "search-empty", |_| {});
         return;
     }
     let (tree, focus) = (&scan.tree, scan.focus);

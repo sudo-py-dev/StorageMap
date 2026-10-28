@@ -13,7 +13,7 @@ use super::{Env, ScanView, node_menu};
 use crate::app::Action;
 use crate::fmt;
 use crate::scan_job::PROGRESS_REFRESH;
-use crate::widgets::{elided_label, paragraph, row};
+use crate::widgets::{elided_label, empty_state, row};
 
 /// Minimum-size choices offered in the UI.
 const MIN_SIZES: [u64; 5] = [
@@ -259,7 +259,7 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     ui.add_space(4.0);
     match &scan.duplicates {
         State::Idle | State::Running { .. } => {
-            paragraph(ui, env.i18n, &env.i18n.logical("dup-hint"));
+            empty_state(ui, env.i18n, "🧬", "dup-empty-title", "dup-hint", |_| {});
         }
         State::Done {
             root,

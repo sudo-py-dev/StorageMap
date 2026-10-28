@@ -2,7 +2,9 @@
 //!
 //! `STORAGEMAP_SCREENSHOT=/tmp/shot.rgba storagemap PATH` scans PATH, waits
 //! for the UI to settle, writes the window as `"W H\n"` + raw RGBA bytes and
-//! exits. `STORAGEMAP_SCREENSHOT_TAB` picks the tab (e.g. `details`).
+//! exits. `STORAGEMAP_SCREENSHOT_TAB` picks the tab (e.g. `details`);
+//! `STORAGEMAP_SCREENSHOT_SETTINGS` opens a settings page (e.g. `updates`).
+//! Without a PATH it captures the start screen.
 //! Inactive unless the variable is set.
 
 use std::io::Write;
@@ -18,6 +20,8 @@ const SETTLE_FRAMES: u32 = 15;
 pub struct DevShot {
     path: PathBuf,
     pub tab: Option<Tab>,
+    /// Settings page to open, from `STORAGEMAP_SCREENSHOT_SETTINGS`.
+    pub settings: Option<String>,
     settled: u32,
     requested: bool,
 }
@@ -35,6 +39,7 @@ impl DevShot {
         Some(DevShot {
             path,
             tab,
+            settings: std::env::var("STORAGEMAP_SCREENSHOT_SETTINGS").ok(),
             settled: 0,
             requested: false,
         })

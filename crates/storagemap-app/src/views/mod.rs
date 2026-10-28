@@ -3,10 +3,12 @@
 
 mod changes;
 pub mod chrome;
+mod cleanup;
 mod details;
 pub mod duplicates;
 mod lists;
 mod node_menu;
+pub mod settings;
 mod start;
 mod table;
 mod tree_panel;
@@ -79,12 +81,14 @@ pub enum Tab {
     Search,
     Changes,
     Duplicates,
+    Cleanup,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 8] = [
+    pub const ALL: [Tab; 9] = [
         Tab::Treemap,
         Tab::Details,
+        Tab::Cleanup,
         Tab::TopFiles,
         Tab::Types,
         Tab::Ages,
@@ -103,6 +107,7 @@ impl Tab {
             Tab::Search => "tab-search",
             Tab::Changes => "tab-changes",
             Tab::Duplicates => "tab-duplicates",
+            Tab::Cleanup => "tab-cleanup",
         }
     }
 }
@@ -146,6 +151,8 @@ pub struct ScanView {
     pub focus: NodeId,
     pub selected: Option<NodeId>,
     pub tab: Tab,
+    /// When the tab last changed, for the content fade-in.
+    pub tab_changed: Option<std::time::Instant>,
     /// Bumped whenever the tree changes (deletions).
     pub generation: u64,
     pub expanded: HashSet<NodeId>,
@@ -170,6 +177,8 @@ pub struct ScanView {
     pub snapshots: Vec<SnapshotInfo>,
     pub(super) change_rows: Cached<(NodeId, u64, i64), Vec<changes::Row>>,
     pub(super) duplicates: duplicates::State,
+    pub(super) cleanup: Cached<(NodeId, u64), Vec<storagemap_core::cleanup::Suggestion>>,
+    pub(super) cleanup_expanded: HashSet<storagemap_core::cleanup::CleanupKind>,
 }
 
 impl ScanView {
@@ -184,6 +193,8 @@ impl ScanView {
             focus: root,
             selected: Some(root),
             tab: Tab::default(),
+            // Fade the results in when a scan finishes.
+            tab_changed: Some(std::time::Instant::now()),
             generation: 0,
             expanded: HashSet::from([root]),
             scroll_tree_to: None,
@@ -204,6 +215,8 @@ impl ScanView {
             snapshots: Vec::new(),
             change_rows: Cached::default(),
             duplicates: duplicates::State::default(),
+            cleanup: Cached::default(),
+            cleanup_expanded: HashSet::new(),
         }
     }
 

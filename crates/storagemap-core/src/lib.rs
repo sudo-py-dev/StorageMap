@@ -4,6 +4,7 @@
 
 pub mod analysis;
 mod backend;
+pub mod cleanup;
 pub mod duplicates;
 pub mod export;
 pub mod ntfs;

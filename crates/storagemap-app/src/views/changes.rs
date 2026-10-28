@@ -8,7 +8,7 @@ use super::table::{self, Col, TableSource};
 use super::{Env, ScanView, node_menu};
 use crate::app::Action;
 use crate::fmt;
-use crate::widgets::{paragraph, row};
+use crate::widgets::{empty_state, row};
 
 /// Shrinking is good news for a disk; colour it calmly.
 const SHRINK_COLOR: Color32 = Color32::from_rgb(70, 170, 100);
@@ -190,10 +190,10 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
 
 fn picker(ui: &mut Ui, env: &mut Env<'_>, scan: &ScanView) {
     ui.with_layout(egui::Layout::top_down(env.i18n.dir().start()), |ui| {
-        ui.heading(env.t("compare-title"));
         if scan.snapshots.is_empty() {
-            paragraph(ui, env.i18n, &env.i18n.logical("compare-none"));
+            empty_state(ui, env.i18n, "🕓", "compare-title", "compare-none", |_| {});
         } else {
+            ui.heading(env.t("compare-title"));
             snapshot_menu(ui, env, scan);
         }
         ui.add_space(8.0);

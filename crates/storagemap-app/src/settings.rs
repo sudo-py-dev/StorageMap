@@ -60,6 +60,16 @@ pub struct Settings {
     pub auto_snapshot: bool,
     /// Smallest file the duplicate finder considers.
     pub duplicate_min_size: u64,
+    /// Ask GitHub once a day whether a newer release exists.
+    pub check_updates: bool,
+    /// Unix seconds of the last update check.
+    pub last_update_check: i64,
+    /// egui zoom factor (also changed with Ctrl +/-).
+    pub ui_scale: f32,
+    /// The window has been sized to the monitor once.
+    pub window_sized: bool,
+    /// A release the user chose to skip.
+    pub skipped_update: Option<String>,
 }
 
 impl Default for Settings {
@@ -78,6 +88,11 @@ impl Default for Settings {
             recent: Vec::new(),
             auto_snapshot: true,
             duplicate_min_size: DEFAULT_DUPLICATE_MIN_SIZE,
+            check_updates: true,
+            last_update_check: 0,
+            ui_scale: 1.0,
+            window_sized: false,
+            skipped_update: None,
         }
     }
 }

@@ -279,7 +279,7 @@ mod imp {
         let label = label.replace(['\n', '\r'], " ");
         let entry = format!(
             "[Desktop Entry]\nType=Application\nName=StorageMap\nGenericName={label}\nComment={label}\n\
-             Exec={} %f\nIcon=drive-harddisk\nTerminal=false\nCategories=System;Utility;Filesystem;\n\
+             Exec={} %f\nIcon=storagemap\nTerminal=false\nCategories=System;Utility;Filesystem;\n\
              MimeType=inode/directory;\nKeywords=disk;space;usage;treemap;\n",
             exec_quote(exe)
         );

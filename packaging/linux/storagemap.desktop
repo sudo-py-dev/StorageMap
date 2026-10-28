@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=StorageMap
+GenericName=Disk Usage Analyzer
+GenericName[he]=מנתח שטח דיסק
+GenericName[ar]=محلل مساحة القرص
+Comment=See where your disk space goes
+Comment[he]=לראות לאן הולך שטח הדיסק
+Comment[ar]=اعرف أين تذهب مساحة القرص
+Exec=storagemap %f
+Icon=storagemap
+Terminal=false
+Categories=System;Utility;Filesystem;
+MimeType=inode/directory;
+Keywords=disk;space;usage;treemap;duplicates;storage;
+StartupWMClass=storagemap

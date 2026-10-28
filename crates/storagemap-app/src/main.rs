@@ -13,6 +13,8 @@ mod i18n;
 mod platform;
 mod scan_job;
 mod settings;
+mod theme;
+mod update;
 mod views;
 mod widgets;
 
@@ -20,6 +22,11 @@ use std::process::ExitCode;
 
 const MIN_WINDOW: [f32; 2] = [760.0, 480.0];
 const DEFAULT_WINDOW: [f32; 2] = [1280.0, 820.0];
+
+fn window_icon() -> egui::IconData {
+    eframe::icon_data::from_png_bytes(include_bytes!("../../../assets/icon/storagemap-256.png"))
+        .unwrap_or_default()
+}
 
 fn main() -> ExitCode {
     tracing_subscriber::fmt()
@@ -57,7 +64,8 @@ fn main() -> ExitCode {
             .with_app_id("storagemap")
             .with_inner_size(DEFAULT_WINDOW)
             .with_min_inner_size(MIN_WINDOW)
-            .with_drag_and_drop(true),
+            .with_drag_and_drop(true)
+            .with_icon(window_icon()),
         persist_window: true,
         ..Default::default()
     };

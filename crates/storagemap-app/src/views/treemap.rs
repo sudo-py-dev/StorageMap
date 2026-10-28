@@ -12,7 +12,9 @@ use storagemap_core::{Metric, NodeId, Tree};
 use super::{Env, ScanView, node_menu};
 use crate::app::Action;
 use crate::filetype::Category;
+use crate::theme;
 use crate::widgets::paint_text;
+use std::time::Instant;
 
 /// Hard cap on drawn tiles; keeps frames fast on million-file scans.
 const MAX_TILES: usize = 30_000;
@@ -20,7 +22,13 @@ const MAX_TILES: usize = 30_000;
 const MIN_SIDE: f32 = 3.0;
 const PAD: f32 = 2.0;
 const HEADER: f32 = 16.0;
-const LEGEND_HEIGHT: f32 = 26.0;
+const LEGEND_LINE: f32 = 24.0;
+/// Rough width of one legend entry, to predict how many lines it wraps to.
+const LEGEND_ENTRY_WIDTH: f32 = 160.0;
+/// Seconds for the zoom transition when the focused folder changes.
+const ZOOM_TIME: f32 = 0.32;
+/// Relative inset the layout grows from when not zooming into a tile.
+const SETTLE_SHRINK: f32 = 0.03;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Key {
@@ -51,6 +59,10 @@ impl Tile {
 pub struct Cache {
     key: Option<Key>,
     tiles: Vec<Tile>,
+    /// Tile the user zoomed into, consumed by the next layout.
+    zoom_from: Option<Rect>,
+    /// Running transition: tiles grow out of this rect.
+    anim: Option<(Rect, Instant)>,
 }
 
 impl Cache {
@@ -136,7 +148,20 @@ fn mirror(tiles: &mut [Tile], area: Rect) {
 }
 
 pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
-    let size = ui.available_size() - vec2(0.0, LEGEND_HEIGHT);
+    // Reserve room for the legend: as many lines as last frame's categories need.
+    let categories = scan
+        .treemap
+        .tiles
+        .iter()
+        .filter_map(|t| t.category)
+        .collect::<BTreeSet<_>>()
+        .len()
+        .max(1);
+    let lines = ((categories as f32 * LEGEND_ENTRY_WIDTH) / ui.available_width().max(1.0))
+        .ceil()
+        .max(1.0);
+    let legend_height = lines * LEGEND_LINE + 4.0;
+    let size = ui.available_size() - vec2(0.0, legend_height);
     let (rect, response) = ui.allocate_exact_size(size.max(vec2(10.0, 10.0)), Sense::click());
     let key = Key {
         focus: scan.focus,
@@ -159,9 +184,20 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         if key.rtl {
             mirror(&mut tiles, rect);
         }
+        let focus_changed = scan.treemap.key.is_some_and(|k| k.focus != key.focus);
+        let anim = match scan.treemap.zoom_from.take() {
+            Some(from) => Some((from, Instant::now())),
+            // Going up or jumping elsewhere: a gentle settle-in instead.
+            None if focus_changed => {
+                Some((rect.shrink2(rect.size() * SETTLE_SHRINK), Instant::now()))
+            }
+            None => None,
+        };
         scan.treemap = Cache {
             key: Some(key),
             tiles,
+            zoom_from: None,
+            anim,
         };
     }
     let tiles = &scan.treemap.tiles;
@@ -180,7 +216,21 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         return;
     }
 
-    paint_tiles(&painter, env, tree, tiles, &visuals);
+    match scan.treemap.anim {
+        Some((from, start)) if start.elapsed().as_secs_f32() < ZOOM_TIME => {
+            let t = theme::ease_out(start.elapsed().as_secs_f32() / ZOOM_TIME);
+            let moving: Vec<Tile> = tiles
+                .iter()
+                .map(|tile| Tile {
+                    rect: zoom_rect(tile.rect, rect, from, t),
+                    ..*tile
+                })
+                .collect();
+            paint_tiles(&painter, env, tree, &moving, &visuals);
+            ui.ctx().request_repaint();
+        }
+        _ => paint_tiles(&painter, env, tree, tiles, &visuals),
+    }
 
     let hovered = response
         .hover_pos()
@@ -208,6 +258,9 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     }
     if let Some(t) = hovered {
         if response.double_clicked() {
+            if tree.node(t.id).is_dir() {
+                scan.treemap.zoom_from = Some(t.rect);
+            }
             env.push(Action::Focus(t.id));
         } else if response.clicked() {
             env.push(Action::Select(t.id));
@@ -224,6 +277,21 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     }
 
     legend(ui, env, tiles);
+}
+
+/// Where `r` (laid out in `area`) appears while zooming out of `from`:
+/// at `t = 0` the whole layout is squeezed into `from`, at `t = 1` it is final.
+fn zoom_rect(r: Rect, area: Rect, from: Rect, t: f32) -> Rect {
+    let sx = from.width() / area.width().max(1.0);
+    let sy = from.height() / area.height().max(1.0);
+    let squeezed = Rect::from_min_size(
+        egui::pos2(
+            from.left() + (r.left() - area.left()) * sx,
+            from.top() + (r.top() - area.top()) * sy,
+        ),
+        vec2(r.width() * sx, r.height() * sy),
+    );
+    Rect::from_min_max(squeezed.min.lerp(r.min, t), squeezed.max.lerp(r.max, t))
 }
 
 fn paint_tiles(
@@ -345,7 +413,7 @@ fn legend(ui: &mut Ui, env: &Env<'_>, tiles: &[Tile]) {
         crate::i18n::Direction::Rtl => Layout::right_to_left(Align::Center),
     };
     ui.allocate_ui_with_layout(
-        vec2(ui.available_width(), LEGEND_HEIGHT),
+        vec2(ui.available_width(), ui.available_height()),
         layout.with_main_wrap(true),
         |ui| {
             for cat in present.into_iter().map(|i| Category::ALL[i]) {

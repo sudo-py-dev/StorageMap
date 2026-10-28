@@ -2,3 +2,6 @@
 *.rgba
 *.tmp
 .DS_Store
+
+# Local research notes, not part of the project
+/TREESIZE_MAP.md

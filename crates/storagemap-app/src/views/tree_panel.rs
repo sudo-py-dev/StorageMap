@@ -62,18 +62,25 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     let tree = &scan.tree;
 
     let mut collapse = false;
+    let root = tree.node(tree.root());
     row(ui, env.i18n.dir(), |ui| {
-        let root = tree.node(tree.root());
-        ui.strong(env.i18n.v(&env.metric_text(root)));
-        ui.weak(env.i18n.v(&format!(
-            "{} · {}",
-            env.i18n.count("files-count", root.files),
-            env.i18n.count("folders-count", root.dirs)
-        )));
+        ui.label(
+            egui::RichText::new(env.i18n.v(&env.metric_text(root)))
+                .strong()
+                .size(17.0),
+        );
         ui.with_layout(env.i18n.dir().end_row(), |ui| {
             collapse = ui.small_button(env.t("action-collapse-all")).clicked();
         });
     });
+    // Counts get their own line, elided rather than colliding with the button.
+    let counts = format!(
+        "{} · {}",
+        env.i18n.count("files-count", root.files),
+        env.i18n.count("folders-count", root.dirs)
+    );
+    let weak = ui.visuals().weak_text_color();
+    crate::widgets::elided_label(ui, env.i18n, &counts, weak);
     ui.separator();
 
     let mut scroll = egui::ScrollArea::vertical()
@@ -109,32 +116,33 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     }
 }
 
-/// ▶ / ◀ / ▼ drawn as a polygon: the font versions render as colour emoji.
+/// A disclosure triangle that rotates smoothly between closed (pointing to
+/// the reading end) and open (pointing down). Drawn as a polygon because
+/// the font glyphs render as colour emoji.
 fn disclosure_triangle(
     painter: &egui::Painter,
     c: egui::Pos2,
-    expanded: bool,
+    open: f32,
     rtl: bool,
     color: egui::Color32,
 ) {
-    const R: f32 = 4.0;
-    let points = match (expanded, rtl) {
-        (true, _) => vec![
-            c + egui::vec2(-R, -R * 0.6),
-            c + egui::vec2(R, -R * 0.6),
-            c + egui::vec2(0.0, R * 0.7),
-        ],
-        (false, false) => vec![
-            c + egui::vec2(-R * 0.6, -R),
-            c + egui::vec2(R * 0.7, 0.0),
-            c + egui::vec2(-R * 0.6, R),
-        ],
-        (false, true) => vec![
-            c + egui::vec2(R * 0.6, -R),
-            c + egui::vec2(-R * 0.7, 0.0),
-            c + egui::vec2(R * 0.6, R),
-        ],
-    };
+    const R: f32 = 4.2;
+    // Closed shape points towards +x; rotate by 90° when open, mirrored in RTL.
+    let base = [
+        egui::vec2(-R * 0.6, -R),
+        egui::vec2(R * 0.7, 0.0),
+        egui::vec2(-R * 0.6, R),
+    ];
+    let angle = open * std::f32::consts::FRAC_PI_2;
+    let (sin, cos) = angle.sin_cos();
+    let points = base
+        .iter()
+        .map(|v| {
+            let v = if rtl { egui::vec2(-v.x, v.y) } else { *v };
+            let (s, k) = if rtl { (-sin, cos) } else { (sin, cos) };
+            c + egui::vec2(v.x * k - v.y * s, v.x * s + v.y * k)
+        })
+        .collect();
     painter.add(egui::Shape::convex_polygon(
         points,
         color,
@@ -179,13 +187,12 @@ fn paint_row(
     let indent = f32::from(row.depth) * INDENT;
     let arrow_rect = dir.span(rect, indent, ARROW_WIDTH);
     if row.has_children {
-        disclosure_triangle(
-            &painter,
-            arrow_rect.center(),
+        let open = ui.ctx().animate_bool_with_time(
+            response.id.with("open"),
             row.expanded,
-            env.i18n.is_rtl(),
-            weak,
+            crate::theme::ANIMATION_TIME,
         );
+        disclosure_triangle(&painter, arrow_rect.center(), open, env.i18n.is_rtl(), weak);
     }
     let bar_rect = dir.span(
         rect.shrink2(egui::vec2(0.0, 7.0)),

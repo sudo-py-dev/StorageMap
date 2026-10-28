@@ -1,6 +1,9 @@
 [package]
 name = "storagemap"
-description = "StorageMap - see where your disk space goes"
+description = "Fast disk space analyzer with treemap, snapshots and duplicate finder"
+homepage = "https://github.com/sudo-py-dev/StorageMap"
+repository = "https://github.com/sudo-py-dev/StorageMap"
+readme = "../../README.md"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -22,9 +25,14 @@ unicode-bidi = "0.3"
 rfd = "0.17"
 trash = "5"
 open = "5"
+semver = "1"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ureq = "3"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
@@ -32,5 +40,32 @@ windows-sys = { version = "0.61", features = [
   "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging",
 ] }
 
+[build-dependencies]
+winresource = "0.1"
+
 [dev-dependencies]
-serde_json = "1"
+
+[package.metadata.deb]
+name = "storagemap"
+maintainer = "StorageMap contributors <noreply@github.com>"
+copyright = "StorageMap contributors"
+section = "utils"
+priority = "optional"
+depends = "$auto"
+extended-description = """\
+Fast disk space analyzer. Scans folders in parallel with statx, shows a \
+treemap, largest files, file types and ages, compares scans over time and \
+finds duplicate files. English, Hebrew and Arabic with full RTL support."""
+assets = [
+  ["target/release/storagemap", "usr/bin/", "755"],
+  ["../../packaging/linux/storagemap.desktop", "usr/share/applications/", "644"],
+  ["../../assets/storagemap.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+  ["../../assets/icon/storagemap-512.png", "usr/share/icons/hicolor/512x512/apps/storagemap.png", "644"],
+  ["../../assets/icon/storagemap-256.png", "usr/share/icons/hicolor/256x256/apps/storagemap.png", "644"],
+  ["../../assets/icon/storagemap-128.png", "usr/share/icons/hicolor/128x128/apps/storagemap.png", "644"],
+  ["../../assets/icon/storagemap-64.png", "usr/share/icons/hicolor/64x64/apps/storagemap.png", "644"],
+  ["../../assets/icon/storagemap-48.png", "usr/share/icons/hicolor/48x48/apps/storagemap.png", "644"],
+  ["../../assets/icon/storagemap-32.png", "usr/share/icons/hicolor/32x32/apps/storagemap.png", "644"],
+  ["../../assets/icon/storagemap-16.png", "usr/share/icons/hicolor/16x16/apps/storagemap.png", "644"],
+  ["../../README.md", "usr/share/doc/storagemap/README.md", "644"],
+]

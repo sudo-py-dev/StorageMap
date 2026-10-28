@@ -15,6 +15,10 @@ use crate::settings::{STORAGE_KEY, Settings};
 use crate::views::{self, ScanView, Tab};
 
 const TOAST_TIME: Duration = Duration::from_secs(4);
+const TOAST_FADE: f32 = 0.25;
+/// Share of the monitor the window takes on first launch.
+const FIRST_LAUNCH_SCREEN_SHARE: f32 = 0.82;
+const FIRST_LAUNCH_MAX: egui::Vec2 = egui::vec2(1680.0, 1050.0);
 const VOLUME_REFRESH: Duration = Duration::from_secs(5);
 /// Snapshots kept per scanned folder; older ones are pruned.
 const MAX_SNAPSHOTS_PER_FOLDER: usize = 30;
@@ -49,13 +53,36 @@ pub enum Action {
     BrowseSnapshot,
     ClearComparison,
     SetDuplicateMinSize(u64),
+    OpenSettings,
+    CheckUpdates,
+    InstallUpdate,
+    DismissUpdate,
+    OpenUrl(String),
+    ShowReleaseNotes(bool),
+    /// Don't announce this version again (manual checks still show it).
+    SkipUpdate(String),
+    RestartApp,
 }
 
 pub struct Toast {
     /// Display-ready (visual order) text.
     pub text: String,
     pub is_error: bool,
-    pub until: Instant,
+    pub shown_at: Instant,
+}
+
+impl Toast {
+    pub fn expired(&self) -> bool {
+        self.shown_at.elapsed() > TOAST_TIME
+    }
+
+    /// Opacity for a fade in and out at either end of its lifetime.
+    pub fn opacity(&self) -> f32 {
+        let t = self.shown_at.elapsed().as_secs_f32();
+        let fade_in = crate::theme::ease_out(t / TOAST_FADE);
+        let fade_out = crate::theme::ease_out((TOAST_TIME.as_secs_f32() - t) / TOAST_FADE);
+        fade_in.min(fade_out)
+    }
 }
 
 pub struct App {
@@ -73,6 +100,12 @@ pub struct App {
     devshot: Option<crate::devshot::DevShot>,
     /// Background snapshot writes; joined on exit so none is cut short.
     writers: Vec<std::thread::JoinHandle<()>>,
+    pub show_settings: bool,
+    pub settings_section: views::settings::Section,
+    pub updater: crate::update::Updater,
+    pub update_dismissed: bool,
+    pub show_release_notes: bool,
+    pub logo: egui::TextureHandle,
 }
 
 impl App {
@@ -82,10 +115,8 @@ impl App {
             .and_then(|s| eframe::get_value(s, STORAGE_KEY))
             .unwrap_or_default();
         cc.egui_ctx.set_theme(settings.theme.preference());
-        cc.egui_ctx.global_style_mut(|style| {
-            style.spacing.item_spacing = egui::vec2(8.0, 6.0);
-            style.spacing.button_padding = egui::vec2(8.0, 4.0);
-        });
+        crate::theme::install(&cc.egui_ctx);
+        cc.egui_ctx.set_zoom_factor(settings.ui_scale);
         let mut app = App {
             i18n: I18n::new(settings.effective_lang()),
             settings,
@@ -100,7 +131,29 @@ impl App {
             actions: Vec::new(),
             devshot: crate::devshot::DevShot::from_env(),
             writers: Vec::new(),
+            show_settings: false,
+            settings_section: views::settings::Section::default(),
+            updater: crate::update::Updater::default(),
+            update_dismissed: false,
+            show_release_notes: false,
+            logo: load_logo(&cc.egui_ctx),
         };
+        app.maybe_check_updates(&cc.egui_ctx);
+        if let Some(section) = app
+            .devshot
+            .as_ref()
+            .and_then(|d| d.settings.as_deref())
+            .and_then(views::settings::Section::from_name)
+        {
+            app.settings_section = section;
+            app.show_settings = true;
+        }
+        if let Err(err) = std::thread::Builder::new()
+            .name("storagemap-cleanup".into())
+            .spawn(crate::update::cleanup_downloads)
+        {
+            tracing::debug!(%err, "cannot start cleanup");
+        }
         if let Some(path) = initial {
             app.actions.push(Action::StartScan(path));
         }
@@ -112,7 +165,7 @@ impl App {
         self.toast = Some(Toast {
             text,
             is_error,
-            until: Instant::now() + TOAST_TIME,
+            shown_at: Instant::now(),
         });
     }
 
@@ -269,6 +322,33 @@ impl App {
             }
             Action::ClearComparison => self.with_scan(|s| s.comparison = None),
             Action::SetDuplicateMinSize(size) => self.settings.duplicate_min_size = size,
+            Action::OpenSettings => self.show_settings = true,
+            Action::CheckUpdates => {
+                self.update_dismissed = false;
+                self.settings.skipped_update = None;
+                self.updater.start_check(ctx);
+                self.settings.last_update_check = fmt::now_unix();
+            }
+            Action::InstallUpdate => self.updater.start_install(ctx),
+            Action::DismissUpdate => self.update_dismissed = true,
+            Action::ShowReleaseNotes(show) => self.show_release_notes = show,
+            Action::SkipUpdate(version) => {
+                self.settings.skipped_update = Some(version);
+                self.update_dismissed = true;
+                self.show_release_notes = false;
+            }
+            Action::RestartApp => match crate::update::relaunch() {
+                Ok(()) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                Err(e) => self.notify(self.i18n.v(&e.to_string()), true),
+            },
+            Action::OpenUrl(url) => {
+                if let Err(e) = open::that_detached(&url) {
+                    let text = self
+                        .i18n
+                        .ta("open-failed", &[("error", e.to_string().into())]);
+                    self.notify(text, true);
+                }
+            }
         }
     }
 
@@ -405,6 +485,48 @@ impl App {
         }
     }
 
+    /// Daily background update check, if enabled.
+    fn maybe_check_updates(&mut self, ctx: &egui::Context) {
+        let now = fmt::now_unix();
+        if self.settings.check_updates
+            && self.devshot.is_none()
+            && now - self.settings.last_update_check >= crate::update::CHECK_INTERVAL_SECS
+        {
+            self.settings.last_update_check = now;
+            self.updater.start_check(ctx);
+        }
+    }
+
+    fn poll_updater(&mut self, ctx: &egui::Context) {
+        self.updater.poll();
+        if matches!(
+            self.updater,
+            crate::update::Updater::Finished(crate::update::Installed::QuitNow)
+        ) {
+            // The installer replaces the app and relaunches it.
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
+
+    /// First launch: take a comfortable share of the monitor, centred.
+    /// Later launches restore the size the user left it at.
+    fn size_window_on_first_launch(&mut self, ctx: &egui::Context) {
+        if self.settings.window_sized {
+            return;
+        }
+        let Some(monitor) = ctx.input(|i| i.viewport().monitor_size) else {
+            return;
+        };
+        let size = (monitor * FIRST_LAUNCH_SCREEN_SHARE)
+            .min(FIRST_LAUNCH_MAX)
+            .max(egui::vec2(760.0, 480.0));
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+        ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(
+            ((monitor - size) / 2.0).to_pos2(),
+        ));
+        self.settings.window_sized = true;
+    }
+
     fn refresh_volumes(&mut self) {
         if self.scan.is_none() && self.job.is_none() && self.volumes_at.elapsed() > VOLUME_REFRESH {
             self.volumes = volumes::list();
@@ -419,32 +541,38 @@ impl eframe::App for App {
         self.poll_job(&ctx);
         self.handle_dropped_folders(&ctx);
         self.refresh_volumes();
-        if self
-            .toast
-            .as_ref()
-            .is_some_and(|t| t.until < Instant::now())
-        {
+        if self.toast.as_ref().is_some_and(Toast::expired) {
             self.toast = None;
         }
+        self.size_window_on_first_launch(&ctx);
+        self.poll_updater(&ctx);
+        // Ctrl +/- zoom is built into egui; remember whatever the user picked.
+        self.settings.ui_scale = ctx.zoom_factor();
 
         views::chrome::top_bar(self, ui);
+        views::chrome::update_banner(self, ui);
         views::chrome::status_bar(self, ui);
         views::chrome::body(self, ui);
         views::chrome::modals(self, &ctx);
+        views::settings::window(self, &ctx);
+        views::chrome::toast(self, &ctx);
         views::chrome::keyboard(self, &ctx);
 
         for action in std::mem::take(&mut self.actions) {
             self.apply(action, &ctx);
         }
         if self.toast.is_some() {
-            ctx.request_repaint_after(Duration::from_millis(500));
+            ctx.request_repaint_after(Duration::from_millis(16));
         }
         if let Some(shot) = &mut self.devshot {
-            let idle = self
-                .scan
-                .as_ref()
-                .is_some_and(|s| !views::duplicates::is_running(s));
-            shot.frame(&ctx, idle && self.job.is_none());
+            // Idle: no scan running, and either results or the start screen shown.
+            let idle = self.job.is_none()
+                && self.actions.is_empty()
+                && self
+                    .scan
+                    .as_ref()
+                    .is_none_or(|s| !views::duplicates::is_running(s));
+            shot.frame(&ctx, idle);
         }
     }
 
@@ -460,6 +588,21 @@ impl eframe::App for App {
         eframe::set_value(storage, STORAGE_KEY, &self.settings);
     }
 }
+
+/// The app icon as a texture for the header and start screen.
+fn load_logo(ctx: &egui::Context) -> egui::TextureHandle {
+    let image = eframe::icon_data::from_png_bytes(LOGO_PNG)
+        .map(|icon| {
+            egui::ColorImage::from_rgba_unmultiplied(
+                [icon.width as usize, icon.height as usize],
+                &icon.rgba,
+            )
+        })
+        .unwrap_or_else(|_| egui::ColorImage::filled([1, 1], crate::theme::ACCENT));
+    ctx.load_texture("storagemap-logo", image, egui::TextureOptions::LINEAR)
+}
+
+pub const LOGO_PNG: &[u8] = include_bytes!("../../../assets/icon/storagemap-128.png");
 
 /// Captures on the UI thread (fast, read-only) and writes on a worker.
 fn save_snapshot_in_background(view: &ScanView) -> Option<std::thread::JoinHandle<()>> {
