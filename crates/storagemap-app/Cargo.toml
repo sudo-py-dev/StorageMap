@@ -1,0 +1,36 @@
+[package]
+name = "storagemap"
+description = "StorageMap - see where your disk space goes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+storagemap-core = { path = "../storagemap-core", features = ["serde"] }
+eframe = { version = "0.37", default-features = true, features = ["persistence"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+egui = "0.37"
+egui_extras = "0.37"
+fluent-bundle = "0.16"
+unic-langid = { version = "0.9", features = ["macros"] }
+sys-locale = "0.3"
+unicode-bidi = "0.3"
+rfd = "0.17"
+trash = "5"
+open = "5"
+serde = { version = "1", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation", "Win32_System_Console", "Win32_System_Registry",
+  "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+serde_json = "1"

@@ -1,0 +1,308 @@
+//! Largest files, file types, age distribution and name search.
+
+use std::time::{Duration, Instant};
+
+use egui::{Response, Ui, vec2};
+use storagemap_core::analysis::{self, AgeBucket, AgeStat, ExtensionStat};
+use storagemap_core::{Metric, NodeId, Tree, ratio};
+
+use super::table::{self, Col, TableSource};
+use super::{Env, ScanView, node_menu};
+use crate::app::Action;
+use crate::filetype::Category;
+use crate::fmt;
+use crate::i18n::{Direction, bidi};
+use crate::widgets::row;
+
+const TOP_FILES: usize = 500;
+const SEARCH_LIMIT: usize = 2_000;
+/// Wait this long after the last keystroke before searching.
+const SEARCH_DEBOUNCE: Duration = Duration::from_millis(250);
+
+/// A list of entries with name, value and containing folder.
+struct EntryList<'a> {
+    tree: &'a Tree,
+    ids: &'a [NodeId],
+    selected: Option<NodeId>,
+}
+
+const ENTRY_COLUMNS: [Col; 3] = [
+    Col::fixed("col-name", 240.0, 1),
+    Col::fixed("col-size", 92.0, 2),
+    Col::flex("col-path"),
+];
+
+impl TableSource for EntryList<'_> {
+    fn rows(&self) -> usize {
+        self.ids.len()
+    }
+
+    fn is_selected(&self, row: usize) -> bool {
+        self.selected == Some(self.ids[row])
+    }
+
+    fn cell(&mut self, ui: &mut Ui, env: &mut Env<'_>, row: usize, col: usize) {
+        let id = self.ids[row];
+        match col {
+            0 => table::text(ui, env, &self.tree.name(id), false),
+            1 => table::text(ui, env, &env.metric_text(self.tree.node(id)), true),
+            _ => {
+                let parent = self
+                    .tree
+                    .parent(id)
+                    .map(|p| self.tree.path(p).to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                table::text(ui, env, &parent, false);
+            }
+        }
+    }
+
+    fn row_response(&mut self, env: &mut Env<'_>, row: usize, response: &Response) {
+        let id = self.ids[row];
+        if response.double_clicked() {
+            env.push(Action::Focus(id));
+        } else if response.clicked() {
+            env.push(Action::Select(id));
+        }
+        response.context_menu(|ui| node_menu::show(ui, env, self.tree, id));
+    }
+}
+
+pub fn top_files(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
+    let metric = match env.settings.metric {
+        Metric::FileCount => Metric::Size,
+        m => m,
+    };
+    let (tree, focus) = (&scan.tree, scan.focus);
+    let ids = scan.top_files.get((focus, metric, scan.generation), || {
+        analysis::top_files(tree, focus, metric, TOP_FILES)
+    });
+    table::show(
+        ui,
+        env,
+        "top-files",
+        &ENTRY_COLUMNS,
+        &mut EntryList {
+            tree,
+            ids,
+            selected: scan.selected,
+        },
+    );
+}
+
+struct TypeList<'a> {
+    stats: &'a [ExtensionStat],
+    total: u64,
+    metric: Metric,
+}
+
+const TYPE_COLUMNS: [Col; 5] = [
+    Col::fixed("col-extension", 110.0, 1),
+    Col::fixed("col-type", 160.0, 3),
+    Col::fixed("col-size", 92.0, 2),
+    Col::flex("col-share"),
+    Col::fixed("col-files", 80.0, 4),
+];
+
+impl TableSource for TypeList<'_> {
+    fn rows(&self) -> usize {
+        self.stats.len()
+    }
+
+    fn is_selected(&self, _: usize) -> bool {
+        false
+    }
+
+    fn cell(&mut self, ui: &mut Ui, env: &mut Env<'_>, row: usize, col: usize) {
+        let s = &self.stats[row];
+        let category = Category::of_extension(&s.extension);
+        match col {
+            0 => {
+                let (swatch, _) = ui.allocate_exact_size(vec2(12.0, 12.0), egui::Sense::hover());
+                ui.painter().rect_filled(swatch, 2.0, category.color());
+                let ext = if s.extension.is_empty() {
+                    env.i18n.logical("no-extension")
+                } else {
+                    format!(".{}", s.extension)
+                };
+                table::text(ui, env, &ext, false);
+            }
+            1 => table::text(ui, env, &env.i18n.logical(category.label_id()), false),
+            2 => table::text(ui, env, &env.metric_value_text(s.metric(self.metric)), true),
+            3 => table::share(ui, env, ratio(s.metric(self.metric), self.total)),
+            _ => table::text(ui, env, &fmt::count(s.files), true),
+        }
+    }
+
+    fn row_response(&mut self, _: &mut Env<'_>, _: usize, _: &Response) {}
+}
+
+pub fn types(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
+    let metric = env.settings.metric;
+    let (tree, focus) = (&scan.tree, scan.focus);
+    let stats = scan.types.get((focus, metric, scan.generation), || {
+        analysis::extensions(tree, focus, metric)
+    });
+    let total = stats.iter().map(|s| s.metric(metric)).sum();
+    table::show(
+        ui,
+        env,
+        "types",
+        &TYPE_COLUMNS,
+        &mut TypeList {
+            stats,
+            total,
+            metric,
+        },
+    );
+}
+
+struct AgeList<'a> {
+    stats: &'a [AgeStat; 7],
+    total: u64,
+    metric: Metric,
+}
+
+const AGE_COLUMNS: [Col; 4] = [
+    Col::fixed("col-modified", 170.0, 1),
+    Col::fixed("col-size", 92.0, 2),
+    Col::flex("col-share"),
+    Col::fixed("col-files", 80.0, 3),
+];
+
+fn age_label_id(bucket: AgeBucket) -> &'static str {
+    match bucket {
+        AgeBucket::Week => "age-week",
+        AgeBucket::Month => "age-month",
+        AgeBucket::HalfYear => "age-half-year",
+        AgeBucket::Year => "age-year",
+        AgeBucket::TwoYears => "age-two-years",
+        AgeBucket::FiveYears => "age-five-years",
+        AgeBucket::Older => "age-older",
+    }
+}
+
+fn age_metric(s: &AgeStat, metric: Metric) -> u64 {
+    match metric {
+        Metric::Size => s.size,
+        Metric::Allocated => s.allocated,
+        Metric::FileCount => s.files,
+    }
+}
+
+impl TableSource for AgeList<'_> {
+    fn rows(&self) -> usize {
+        self.stats.len()
+    }
+
+    fn is_selected(&self, _: usize) -> bool {
+        false
+    }
+
+    fn cell(&mut self, ui: &mut Ui, env: &mut Env<'_>, row: usize, col: usize) {
+        let s = &self.stats[row];
+        match col {
+            0 => table::text(
+                ui,
+                env,
+                &env.i18n.logical(age_label_id(AgeBucket::ALL[row])),
+                false,
+            ),
+            1 => table::text(
+                ui,
+                env,
+                &env.metric_value_text(age_metric(s, self.metric)),
+                true,
+            ),
+            2 => table::share(ui, env, ratio(age_metric(s, self.metric), self.total)),
+            _ => table::text(ui, env, &fmt::count(s.files), true),
+        }
+    }
+
+    fn row_response(&mut self, _: &mut Env<'_>, _: usize, _: &Response) {}
+}
+
+pub fn ages(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
+    let metric = env.settings.metric;
+    let (tree, focus) = (&scan.tree, scan.focus);
+    let stats = scan.ages.get((focus, scan.generation), || {
+        analysis::ages(tree, focus, fmt::now_unix())
+    });
+    let total = stats.iter().map(|s| age_metric(s, metric)).sum();
+    table::show(
+        ui,
+        env,
+        "ages",
+        &AGE_COLUMNS,
+        &mut AgeList {
+            stats,
+            total,
+            metric,
+        },
+    );
+}
+
+pub fn search(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
+    let mut layouter = bidi_layouter(env.i18n.dir());
+    row(ui, env.i18n.dir(), |ui| {
+        let edit = egui::TextEdit::singleline(&mut scan.search_query)
+            .hint_text(env.t("search-hint"))
+            .desired_width(320.0)
+            .layouter(&mut layouter);
+        if ui.add(edit).changed() {
+            scan.search_edited = Some(Instant::now());
+        }
+    });
+    let settled = scan
+        .search_edited
+        .is_none_or(|t| t.elapsed() >= SEARCH_DEBOUNCE);
+    if !settled {
+        ui.ctx().request_repaint_after(SEARCH_DEBOUNCE);
+    }
+    let query = scan.search_query.trim().to_owned();
+    if query.is_empty() {
+        return;
+    }
+    let (tree, focus) = (&scan.tree, scan.focus);
+    let key = (focus, query.clone(), scan.generation);
+    let ids: &[NodeId] = if settled {
+        scan.search
+            .get(key, || analysis::search(tree, focus, &query, SEARCH_LIMIT))
+    } else {
+        &[]
+    };
+    ui.weak(
+        env.i18n
+            .v(&env.i18n.count("search-results", ids.len() as u64)),
+    );
+    table::show(
+        ui,
+        env,
+        "search",
+        &ENTRY_COLUMNS,
+        &mut EntryList {
+            tree,
+            ids,
+            selected: scan.selected,
+        },
+    );
+}
+
+/// Shows typed RTL text in visual order. Reordering keeps the character
+/// count, so cursor positions stay meaningful.
+fn bidi_layouter(
+    dir: Direction,
+) -> impl FnMut(&Ui, &dyn egui::TextBuffer, f32) -> std::sync::Arc<egui::Galley> {
+    move |ui: &Ui, text: &dyn egui::TextBuffer, _wrap: f32| {
+        let logical = text.as_str();
+        let visual = bidi::visual(logical, dir);
+        let shown = if visual.chars().count() == logical.chars().count() {
+            visual
+        } else {
+            logical.to_owned()
+        };
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        ui.painter()
+            .layout_no_wrap(shown, font, ui.visuals().text_color())
+    }
+}

@@ -1,0 +1,4 @@
+/target
+*.rgba
+*.tmp
+.DS_Store
