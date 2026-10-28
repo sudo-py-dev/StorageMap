@@ -4,25 +4,36 @@ name: Release
 # Modelled on ripgrep: the release is created as a draft, every job uploads
 # its own assets, and it is only published once all assets and SHA256SUMS
 # are in place, so the in-app updater never sees a half-finished release.
+#
+# Hardening: actions pinned to commit SHAs, per-job least-privilege
+# permissions, no build cache (release binaries never reuse artifacts from
+# other runs), and workflow values passed to scripts only via env vars.
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
-permissions:
-  contents: write
-  id-token: write # build provenance signing
-  attestations: write # record the attestation
+permissions: {}
+
+# One release per tag at a time; never cancel a release half-way.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   create-release:
+    name: Create draft release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the draft release
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: v
         name: Check the tag matches Cargo.toml
         run: |
@@ -38,26 +49,34 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" --draft --verify-tag --generate-notes --title "StorageMap $GITHUB_REF_NAME"
 
   windows:
+    name: Windows installer
     needs: create-release
     runs-on: windows-latest
+    permissions:
+      contents: write # upload assets
+      id-token: write # sign the provenance attestation
+      attestations: write # store the attestation
     env:
       VERSION: ${{ needs.create-release.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
       - run: cargo build --release --locked -p storagemap
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Build installer
-        run: iscc /DAppVersion=${{ env.VERSION }} installer\windows\storagemap.iss
+        run: iscc "/DAppVersion=$env:VERSION" installer\windows\storagemap.iss
       - name: Portable zip
         shell: pwsh
-        run: Compress-Archive -Path target\release\storagemap.exe, README.md -DestinationPath target\installer\StorageMap-${{ env.VERSION }}-windows-x64-portable.zip
+        run: Compress-Archive -Path target\release\storagemap.exe, README.md -DestinationPath "target\installer\StorageMap-$env:VERSION-windows-x64-portable.zip"
       - name: Attest build provenance
         # Attestations need a public repository (or GitHub Enterprise).
         if: ${{ !github.event.repository.private }}
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: target/installer/*
       - name: Upload assets
@@ -67,15 +86,25 @@ jobs:
         run: gh release upload "$GITHUB_REF_NAME" target/installer/*
 
   linux:
+    name: Linux packages
     needs: create-release
     runs-on: ubuntu-22.04 # older glibc: the .deb runs on more distributions
+    permissions:
+      contents: write # upload assets
+      id-token: write # sign the provenance attestation
+      attestations: write # store the attestation
     env:
       VERSION: ${{ needs.create-release.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@cargo-deb
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        with:
+          tool: cargo-deb
       - run: cargo deb --locked -p storagemap
       - name: Collect assets
         run: |
@@ -84,7 +113,7 @@ jobs:
           tar -C target/release -czf "dist/StorageMap-$VERSION-linux-x86_64.tar.gz" storagemap
       - name: Attest build provenance
         if: ${{ !github.event.repository.private }}
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*
       - name: Upload assets
@@ -93,8 +122,11 @@ jobs:
         run: gh release upload "$GITHUB_REF_NAME" dist/*
 
   publish:
+    name: Checksums and publish
     needs: [windows, linux]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # upload SHA256SUMS and publish the release
     steps:
       - name: Checksums over the exact uploaded files
         env:
