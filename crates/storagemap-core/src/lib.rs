@@ -8,6 +8,7 @@ pub mod cleanup;
 pub mod duplicates;
 pub mod export;
 mod filter;
+pub mod formats;
 pub mod ntfs;
 pub mod operations;
 mod progress;

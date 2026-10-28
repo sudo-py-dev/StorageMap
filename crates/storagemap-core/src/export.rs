@@ -50,6 +50,19 @@ pub trait ReportWriter {
     fn finish(&mut self) -> io::Result<()>;
 }
 
+/// Stable, machine-friendly names of the report's columns, in their
+/// default order (also the keys of JSON reports).
+pub const COLUMN_KEYS: [&str; 8] = [
+    "path",
+    "type",
+    "size",
+    "allocated",
+    "files",
+    "folders",
+    "percent_of_parent",
+    "modified_utc",
+];
+
 /// The tree report's human-facing text, so the GUI can write it in the
 /// user's language. `Default` is the stable English, machine-friendly form.
 pub struct ReportLabels {
@@ -60,24 +73,35 @@ pub struct ReportLabels {
     pub kinds: [String; 4],
     /// Which rows to write.
     pub include: Include,
+    /// Which columns to write, in order, as indices into [`COLUMN_KEYS`].
+    pub columns: Vec<usize>,
+}
+
+impl ReportLabels {
+    /// Titles of the chosen columns, in order.
+    pub fn titles(&self) -> Vec<String> {
+        self.columns
+            .iter()
+            .filter_map(|&c| self.headers.get(c).cloned())
+            .collect()
+    }
+
+    /// Machine names of the chosen columns, in order.
+    pub fn keys(&self) -> Vec<&'static str> {
+        self.columns
+            .iter()
+            .filter_map(|&c| COLUMN_KEYS.get(c).copied())
+            .collect()
+    }
 }
 
 impl Default for ReportLabels {
     fn default() -> Self {
         ReportLabels {
-            headers: [
-                "path",
-                "type",
-                "size",
-                "allocated",
-                "files",
-                "folders",
-                "percent_of_parent",
-                "modified_utc",
-            ]
-            .map(str::to_owned),
+            headers: COLUMN_KEYS.map(str::to_owned),
             kinds: ["folder", "file", "link", "other"].map(str::to_owned),
             include: Include::All,
+            columns: (0..COLUMN_KEYS.len()).collect(),
         }
     }
 }
@@ -91,7 +115,7 @@ pub fn write_tree(
     labels: &ReportLabels,
     writer: &mut dyn ReportWriter,
 ) -> io::Result<()> {
-    writer.header(&labels.headers)?;
+    writer.header(&labels.titles())?;
     let base_depth = tree.depth(root);
     let mut stack = vec![root];
     while let Some(id) = stack.pop() {
@@ -113,7 +137,7 @@ pub fn write_entries<'a>(
     labels: &ReportLabels,
     writer: &mut dyn ReportWriter,
 ) -> io::Result<()> {
-    writer.header(&labels.headers)?;
+    writer.header(&labels.titles())?;
     for (tree, id) in entries {
         write_row(tree, id, labels, writer)?;
     }
@@ -133,8 +157,9 @@ fn write_row(
         Kind::Symlink => 2,
         Kind::Other => 3,
     }];
-    writer.row(&[
-        Value::Text(tree.path(id).to_string_lossy()),
+    let path = tree.path(id);
+    let all = [
+        Value::Text(path.to_string_lossy()),
         Value::Text(Cow::Borrowed(kind)),
         Value::Bytes(node.size),
         Value::Bytes(node.allocated),
@@ -142,7 +167,13 @@ fn write_row(
         Value::Count(node.dirs),
         Value::Share(tree.share_of_parent(id, Metric::Size)),
         Value::Date(node.modified),
-    ])
+    ];
+    let chosen: Vec<Value<'_>> = labels
+        .columns
+        .iter()
+        .filter_map(|&c| all.get(c).cloned())
+        .collect();
+    writer.row(&chosen)
 }
 
 /// Delimited text: RFC 4180 CSV, or tab-separated text that pastes into
@@ -358,13 +389,28 @@ mod tests {
     }
 
     #[test]
+    fn writes_chosen_columns_in_order() {
+        let t = sample();
+        let labels = ReportLabels {
+            columns: vec![2, 0],
+            ..ReportLabels::default()
+        };
+        let mut buf = Vec::new();
+        let mut csv = Delimited::csv(&mut buf);
+        write_tree(&t, t.root(), 0, &labels, &mut csv).expect("csv");
+        drop(csv);
+        let text = String::from_utf8(buf).expect("utf8");
+        assert_eq!(text, "size,path\n6144,/r\n");
+    }
+
+    #[test]
     fn localised_labels() {
         let t = sample();
         let readable = |n: u64| format!("{} KB", n / 1024);
         let labels = ReportLabels {
             headers: ["נתיב", "סוג", "גודל", "b", "c", "d", "e", "f"].map(str::to_owned),
             kinds: ["תיקייה", "קובץ", "קישור", "אחר"].map(str::to_owned),
-            include: Include::All,
+            ..ReportLabels::default()
         };
         let mut buf = Vec::new();
         let mut csv = Delimited::csv(&mut buf)
