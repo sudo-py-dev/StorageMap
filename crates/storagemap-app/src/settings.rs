@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use storagemap_core::Metric;
+use storagemap_core::export::Include;
 
 use crate::fmt::Unit;
 use crate::i18n::Lang;
@@ -70,6 +71,10 @@ pub struct Settings {
     pub window_sized: bool,
     /// A release the user chose to skip.
     pub skipped_update: Option<String>,
+    /// Rows the CSV report lists.
+    pub export_include: Include,
+    /// Write sizes in the CSV report as "1.4 GB" rather than bytes.
+    pub export_readable: bool,
 }
 
 impl Default for Settings {
@@ -93,6 +98,8 @@ impl Default for Settings {
             ui_scale: 1.0,
             window_sized: false,
             skipped_update: None,
+            export_include: Include::All,
+            export_readable: true,
         }
     }
 }

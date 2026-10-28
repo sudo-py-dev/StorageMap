@@ -137,18 +137,18 @@ mod tests {
     #[test]
     fn empties_trash_folder_in_place() {
         let root = std::env::temp_dir().join(format!("storagemap-trash-test-{}", std::process::id()));
-        std::fs::create_dir_all(root.join("files/dir/sub")).unwrap();
-        std::fs::create_dir_all(root.join("info")).unwrap();
-        std::fs::create_dir_all(root.join("expunged/x")).unwrap();
-        std::fs::write(root.join("files/a.txt"), "a").unwrap();
-        std::fs::write(root.join("files/dir/sub/b.txt"), "b").unwrap();
-        std::fs::write(root.join("info/a.txt.trashinfo"), "i").unwrap();
-        std::fs::write(root.join("directorysizes"), "").unwrap();
-        assert_eq!(empty_trash(&root).unwrap(), 5);
-        assert_eq!(std::fs::read_dir(root.join("files")).unwrap().count(), 0);
-        assert_eq!(std::fs::read_dir(root.join("info")).unwrap().count(), 0);
-        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
-        std::fs::remove_dir_all(&root).unwrap();
+        std::fs::create_dir_all(root.join("files/dir/sub")).expect("trash test");
+        std::fs::create_dir_all(root.join("info")).expect("trash test");
+        std::fs::create_dir_all(root.join("expunged/x")).expect("trash test");
+        std::fs::write(root.join("files/a.txt"), "a").expect("trash test");
+        std::fs::write(root.join("files/dir/sub/b.txt"), "b").expect("trash test");
+        std::fs::write(root.join("info/a.txt.trashinfo"), "i").expect("trash test");
+        std::fs::write(root.join("directorysizes"), "").expect("trash test");
+        assert_eq!(empty_trash(&root).expect("trash test"), 5);
+        assert_eq!(std::fs::read_dir(root.join("files")).expect("trash test").count(), 0);
+        assert_eq!(std::fs::read_dir(root.join("info")).expect("trash test").count(), 0);
+        assert_eq!(std::fs::read_dir(&root).expect("trash test").count(), 2);
+        std::fs::remove_dir_all(&root).expect("trash test");
     }
 }
 

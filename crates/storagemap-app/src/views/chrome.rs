@@ -7,6 +7,7 @@ use egui::{
     Align2, CentralPanel, Color32, CornerRadius, Frame, Id, Key, KeyboardShortcut, Layout, Margin,
     Modal, Modifiers, Panel, RichText, Sense, Stroke, Ui, vec2,
 };
+use storagemap_core::export::Include;
 use storagemap_core::{Backend, Metric};
 
 use super::{
@@ -893,6 +894,9 @@ pub fn modals(app: &mut App, ctx: &egui::Context) {
             app.actions.push(Action::CancelTrash);
         }
     }
+    if app.show_export {
+        export_options(app, ctx);
+    }
     if let (Some(id), Some(scan)) = (app.confirm_empty, &app.scan) {
         let i = &app.i18n;
         let size = fmt::size(scan.tree.node(id).size, app.settings.unit, 1, |k| i.logical(k));
@@ -924,6 +928,46 @@ pub fn modals(app: &mut App, ctx: &egui::Context) {
         app.show_about = false;
         app.settings_section = super::settings::Section::About;
         app.show_settings = true;
+    }
+}
+
+/// What the CSV report lists and how sizes are written, asked before saving.
+fn export_options(app: &mut App, ctx: &egui::Context) {
+    let App { i18n: i, settings, actions, .. } = app;
+    let modal = Modal::new(Id::unique("export-options")).show(ctx, |ui| {
+        ui.set_width(440.0);
+        ui.with_layout(Layout::top_down(i.dir().start()), |ui| {
+            ui.heading(format!("{}  {}", crate::icons::EXPORT, i.t("export-title")));
+            ui.add_space(8.0);
+            ui.label(RichText::new(i.t("export-include")).strong());
+            row(ui, i.dir(), |ui| {
+                for (include, id) in Include::ALL.into_iter().zip([
+                    "export-include-all",
+                    "export-include-folders",
+                    "export-include-files",
+                ]) {
+                    ui.selectable_value(&mut settings.export_include, include, i.t(id));
+                }
+            });
+            ui.add_space(8.0);
+            ui.label(RichText::new(i.t("export-sizes")).strong());
+            row(ui, i.dir(), |ui| {
+                ui.selectable_value(&mut settings.export_readable, true, i.t("export-sizes-readable"));
+                ui.selectable_value(&mut settings.export_readable, false, i.t("export-sizes-bytes"));
+            });
+            ui.add_space(14.0);
+            row(ui, i.dir(), |ui| {
+                if ui.add(theme::primary_button(i.t("export-save"))).clicked() {
+                    actions.push(Action::ConfirmExport);
+                }
+                if ui.button(i.t("cancel")).clicked() {
+                    actions.push(Action::CancelExport);
+                }
+            });
+        });
+    });
+    if modal.should_close() {
+        actions.push(Action::CancelExport);
     }
 }
 
@@ -980,7 +1024,11 @@ pub fn keyboard(app: &mut App, ctx: &egui::Context) {
     {
         scan.focus_search = true;
     }
-    if ctx.egui_wants_keyboard_input() || app.confirm_trash.is_some() || app.confirm_empty.is_some() || app.show_settings {
+    if ctx.egui_wants_keyboard_input() || app.confirm_trash.is_some()
+        || app.confirm_empty.is_some()
+        || app.show_export
+        || app.show_settings
+    {
         return;
     }
     let key = |k: Key| ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));

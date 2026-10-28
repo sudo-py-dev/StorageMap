@@ -3,7 +3,8 @@
 //! `STORAGEMAP_SCREENSHOT=/tmp/shot.rgba storagemap PATH` scans PATH, waits
 //! for the UI to settle, writes the window as `"W H\n"` + raw RGBA bytes and
 //! exits. `STORAGEMAP_SCREENSHOT_TAB` picks the tab (e.g. `details`);
-//! `STORAGEMAP_SCREENSHOT_SETTINGS` opens a settings page (e.g. `updates`).
+//! `STORAGEMAP_SCREENSHOT_SETTINGS` opens a settings page (e.g. `updates`),
+//! or `export` for the CSV export options.
 //! Without a PATH it captures the start screen.
 //! Inactive unless the variable is set.
 

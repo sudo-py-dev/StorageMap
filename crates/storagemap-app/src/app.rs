@@ -43,7 +43,10 @@ pub enum Action {
     ConfirmTrash,
     CancelTrash,
     ScanSubtree(NodeId),
+    /// Opens the export options; `ConfirmExport` then asks where to save.
     ExportCsv,
+    ConfirmExport,
+    CancelExport,
     SetLang(Option<Lang>),
     RunAsAdmin,
     Integrate(bool),
@@ -102,6 +105,8 @@ pub struct App {
     /// Emptying in progress: the trash folder, its size, and the result.
     emptying: Option<(NodeId, u64, std::sync::mpsc::Receiver<std::io::Result<usize>>)>,
     pub show_about: bool,
+    /// The CSV export options dialog is open.
+    pub show_export: bool,
     pub elevated: bool,
     pub actions: Vec<Action>,
     devshot: Option<crate::devshot::DevShot>,
@@ -137,6 +142,7 @@ impl App {
             confirm_empty: None,
             emptying: None,
             show_about: false,
+            show_export: false,
             elevated: platform::is_elevated(),
             actions: Vec::new(),
             devshot: crate::devshot::DevShot::from_env(),
@@ -149,12 +155,10 @@ impl App {
             logo: load_logo(&cc.egui_ctx),
         };
         app.maybe_check_updates(&cc.egui_ctx);
-        if let Some(section) = app
-            .devshot
-            .as_ref()
-            .and_then(|d| d.settings.as_deref())
-            .and_then(views::settings::Section::from_name)
-        {
+        let page = app.devshot.as_ref().and_then(|d| d.settings.as_deref());
+        if page == Some("export") {
+            app.show_export = true;
+        } else if let Some(section) = page.and_then(views::settings::Section::from_name) {
             app.settings_section = section;
             app.show_settings = true;
         }
@@ -294,7 +298,12 @@ impl App {
                     self.start_scan(path, ctx);
                 }
             }
-            Action::ExportCsv => self.export_csv(),
+            Action::ExportCsv => self.show_export = self.scan.is_some(),
+            Action::CancelExport => self.show_export = false,
+            Action::ConfirmExport => {
+                self.show_export = false;
+                self.export_csv();
+            }
             Action::SetLang(lang) => {
                 self.settings.lang = lang;
                 self.i18n = I18n::new(self.settings.effective_lang());
@@ -441,23 +450,28 @@ impl App {
         };
         let i = &self.i18n;
         let unit = self.settings.unit;
-        let readable = |bytes: u64| fmt::size(bytes, unit, 1, |k| i.logical(k));
+        let readable_fmt = |bytes: u64| fmt::size(bytes, unit, 1, |k| i.logical(k));
+        let readable = self.settings.export_readable;
+        let (size_id, allocated_id) = if readable {
+            ("col-size", "col-allocated")
+        } else {
+            ("csv-bytes", "csv-allocated-bytes")
+        };
         let labels = storagemap_core::export::CsvLabels {
             headers: [
                 "col-path",
                 "col-type",
-                "csv-bytes",
-                "csv-allocated-bytes",
+                size_id,
+                allocated_id,
                 "col-files",
                 "col-folders",
                 "col-percent",
                 "csv-modified-utc",
-                "col-size",
             ]
-            .map(|id| i.logical(id))
-            .to_vec(),
+            .map(|id| i.logical(id)),
             kinds: ["type-folder", "type-file", "type-link", "type-other"].map(|id| i.logical(id)),
-            readable_size: Some(&readable),
+            readable_size: readable.then_some(&readable_fmt as &dyn Fn(u64) -> String),
+            include: self.settings.export_include,
             bom: true,
         };
         let result = std::fs::File::create(&target).and_then(|f| {

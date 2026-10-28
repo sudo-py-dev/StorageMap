@@ -4,17 +4,41 @@ use std::io::{self, Write};
 
 use crate::tree::{Kind, Metric, NodeId, Tree};
 
+/// Which rows a report lists. Folders are always walked; the filter only
+/// decides what is written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Include {
+    #[default]
+    All,
+    Folders,
+    Files,
+}
+
+impl Include {
+    pub const ALL: [Include; 3] = [Include::All, Include::Folders, Include::Files];
+
+    fn accepts(self, kind: Kind) -> bool {
+        match self {
+            Include::All => true,
+            Include::Folders => kind == Kind::Dir,
+            Include::Files => kind != Kind::Dir,
+        }
+    }
+}
+
 /// The report's human-facing text, so the GUI can write it in the user's
 /// language. `Default` is the stable English, machine-friendly form.
 pub struct CsvLabels<'a> {
     /// Column titles: path, type, size, allocated, files, folders,
-    /// percent of parent, modified (UTC). A ninth title adds a readable size
-    /// column, filled by `readable_size`.
-    pub headers: Vec<String>,
+    /// percent of parent, modified (UTC).
+    pub headers: [String; 8],
     /// Type names: folder, file, link, other.
     pub kinds: [String; 4],
-    /// Formats a byte count for the optional readable size column.
+    /// Writes the size columns with this instead of as exact byte counts.
     pub readable_size: Option<&'a dyn Fn(u64) -> String>,
+    /// Which rows to write.
+    pub include: Include,
     /// Start with a UTF-8 byte order mark: Excel needs it to show
     /// non-Latin names correctly.
     pub bom: bool,
@@ -22,9 +46,8 @@ pub struct CsvLabels<'a> {
 
 impl Default for CsvLabels<'_> {
     fn default() -> Self {
-        let owned = |list: &[&str]| list.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
         CsvLabels {
-            headers: owned(&[
+            headers: [
                 "path",
                 "type",
                 "size",
@@ -33,9 +56,11 @@ impl Default for CsvLabels<'_> {
                 "folders",
                 "percent_of_parent",
                 "modified_utc",
-            ]),
+            ]
+            .map(str::to_owned),
             kinds: ["folder", "file", "link", "other"].map(str::to_owned),
             readable_size: None,
+            include: Include::All,
             bom: false,
         }
     }
@@ -60,31 +85,34 @@ pub fn write_csv<W: Write>(
     let mut stack = vec![root];
     while let Some(id) = stack.pop() {
         let node = tree.node(id);
+        if tree.depth(id) - base_depth < max_depth {
+            stack.extend(tree.children(id).rev());
+        }
+        if !labels.include.accepts(node.kind) {
+            continue;
+        }
+        let size = |bytes: u64| match labels.readable_size {
+            Some(readable) => csv_field(&readable(bytes)),
+            None => bytes.to_string(),
+        };
         let kind = &labels.kinds[match node.kind {
             Kind::Dir => 0,
             Kind::File => 1,
             Kind::Symlink => 2,
             Kind::Other => 3,
         }];
-        write!(
+        writeln!(
             out,
             "{},{},{},{},{},{},{:.2},{}",
             csv_field(&tree.path(id).to_string_lossy()),
             csv_field(kind),
-            node.size,
-            node.allocated,
+            size(node.size),
+            size(node.allocated),
             node.files,
             node.dirs,
             tree.share_of_parent(id, Metric::Size) * 100.0,
             iso_date(node.modified),
         )?;
-        if let Some(readable) = labels.readable_size {
-            write!(out, ",{}", csv_field(&readable(node.size)))?;
-        }
-        writeln!(out)?;
-        if tree.depth(id) - base_depth < max_depth {
-            stack.extend(tree.children(id).rev());
-        }
     }
     out.flush()
 }
@@ -170,29 +198,53 @@ mod tests {
         assert_eq!(text.lines().count(), 3); // header, root, d
     }
 
-    #[test]
-    fn localised_labels() {
+    fn sample() -> Tree {
         let dir = EntryInfo {
             kind: Kind::Dir,
             flags: Flags::empty(),
             modified: 0,
             size: 2048,
-            allocated: 0,
+            allocated: 4096,
         };
-        let t = TreeBuilder::new(PathBuf::from("/r"), dir).finish();
+        let mut b = TreeBuilder::new(PathBuf::from("/r"), dir);
+        let d = b.push(NodeId::ROOT, b"d", dir);
+        b.push(d, b"f", EntryInfo { kind: Kind::File, ..dir });
+        b.finish()
+    }
+
+    fn render(t: &Tree, labels: &CsvLabels) -> String {
+        let mut buf = Vec::new();
+        write_csv(t, t.root(), 8, labels, &mut buf).expect("csv");
+        String::from_utf8(buf).expect("utf8")
+    }
+
+    #[test]
+    fn localised_labels() {
+        let t = sample();
         let readable = |n: u64| format!("{} KB", n / 1024);
         let labels = CsvLabels {
-            headers: ["נתיב", "סוג", "a", "b", "c", "d", "e", "f", "גודל"].map(str::to_owned).to_vec(),
+            headers: ["נתיב", "סוג", "גודל", "b", "c", "d", "e", "f"].map(str::to_owned),
             kinds: ["תיקייה", "קובץ", "קישור", "אחר"].map(str::to_owned),
             readable_size: Some(&readable),
+            include: Include::All,
             bom: true,
         };
-        let mut buf = Vec::new();
-        write_csv(&t, t.root(), 0, &labels, &mut buf).expect("csv");
-        let text = String::from_utf8(buf).expect("utf8");
+        let text = render(&t, &labels);
         let mut lines = text.lines();
-        assert_eq!(lines.next(), Some("\u{FEFF}נתיב,סוג,a,b,c,d,e,f,גודל"));
-        assert!(lines.next().expect("row").ends_with(",2 KB"));
-        assert!(text.contains(",תיקייה,"));
+        assert_eq!(lines.next(), Some("\u{FEFF}נתיב,סוג,גודל,b,c,d,e,f"));
+        assert!(lines.next().expect("row").starts_with("/r,תיקייה,"));
+        assert!(text.contains(",2 KB,"), "{text}");
+    }
+
+    #[test]
+    fn filters_rows_but_walks_folders() {
+        let t = sample();
+        let only = |include| {
+            let text = render(&t, &CsvLabels { include, ..CsvLabels::default() });
+            text.lines().skip(1).map(|l| l.split(',').next().unwrap_or("").to_owned()).collect::<Vec<_>>()
+        };
+        assert_eq!(only(Include::Folders), ["/r", "/r/d"]);
+        assert_eq!(only(Include::Files), ["/r/d/f"]);
+        assert_eq!(only(Include::All).len(), 3);
     }
 }
