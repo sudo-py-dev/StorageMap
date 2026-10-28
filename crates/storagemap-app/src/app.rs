@@ -566,6 +566,17 @@ impl App {
         if let Some(job) = &self.job {
             job.cancel();
         }
+        // A replaced scan's tab keeps what it found so far.
+        for view in self.tabs_mut().filter(|v| v.scanning) {
+            view.scanning = false;
+            view.cancelled = true;
+        }
+        // Rescanning an open folder updates its tab in place, keeping the
+        // user's place, instead of opening a fresh one.
+        let root = std::path::absolute(&path).unwrap_or_else(|_| path.clone());
+        if let Some(view) = self.tabs_mut().find(|v| v.tree.root_path() == root) {
+            view.scanning = true;
+        }
         let opts = ScanOptions {
             cross_filesystems: self.settings.cross_filesystems,
             prefer_mft: self.settings.prefer_mft,
@@ -574,7 +585,12 @@ impl App {
         };
         match ScanJob::start(path, opts, ctx.clone()) {
             Ok(job) => self.job = Some(job),
-            Err(e) => self.notify(self.i18n.v(&e.to_string()), true),
+            Err(e) => {
+                for view in self.tabs_mut() {
+                    view.scanning = false;
+                }
+                self.notify(self.i18n.v(&e.to_string()), true);
+            }
         }
     }
 
