@@ -402,6 +402,12 @@ impl ScanView {
         self.expansion_version += 1;
     }
 
+    /// A file was replaced by a hard link: it no longer takes space of its own.
+    pub fn mark_linked(&mut self, id: NodeId) {
+        self.tree.mark_linked(id);
+        self.generation += 1;
+    }
+
     /// Removes a deleted entry and moves focus/selection off it.
     pub fn remove(&mut self, id: NodeId) {
         let parent = self.tree.parent(id).unwrap_or(self.tree.root());

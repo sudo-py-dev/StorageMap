@@ -65,6 +65,8 @@ pub struct Settings {
     pub auto_snapshot: bool,
     /// Smallest file the duplicate finder considers.
     pub duplicate_min_size: u64,
+    /// Also compute a SHA-256 checksum of each duplicate group.
+    pub duplicate_sha256: bool,
     /// Ask GitHub once a day whether a newer release exists.
     pub check_updates: bool,
     /// Unix seconds of the last update check.
@@ -107,6 +109,7 @@ impl Default for Settings {
             recent: Vec::new(),
             auto_snapshot: true,
             duplicate_min_size: DEFAULT_DUPLICATE_MIN_SIZE,
+            duplicate_sha256: false,
             check_updates: true,
             last_update_check: 0,
             ui_scale: 1.0,

@@ -296,6 +296,43 @@ dup-groups =
 dup-each = { $size } each
 dup-reclaimable = { $size } reclaimable
 dup-none = No duplicate files found.
+dup-sha256 = SHA-256
+dup-sha256-hint = Also compute a SHA-256 checksum of each group, to compare with other tools. Reads each group once more.
+dup-col-remove = Remove
+dup-col-group = Group
+dup-mark-hint = Mark this copy to move to the trash or replace with a hard link
+dup-keep = Keep:
+dup-keep-newest = the newest copy
+dup-keep-oldest = the oldest copy
+dup-keep-shortest = the shortest path
+dup-mark-others = Mark the other copies
+dup-mark-others-hint = In every group, mark all copies except the one the rule keeps
+dup-clear-marks = Clear marks
+dup-marked = { $count } marked · { $size }
+dup-trash = Move to trash
+dup-link = Replace with hard links
+dup-link-hint = Keep one copy on disk and make the others point to it. Needs every copy on the same drive.
+dup-working = Working… { $done } of { $total }
+dup-confirm-trash = Move the marked copies to the trash?
+dup-confirm-trash-body = { $count } files ({ $size }) go to the trash. One copy of each group always stays.
+dup-confirm-link = Replace the marked copies with hard links?
+dup-confirm-link-body = { $count } files ({ $size }) become hard links to the copy kept, so they stop taking space. Each pair is checked byte by byte first. Afterwards both names share one copy: changing one changes the other.
+dup-more =
+    { $count ->
+        [one] and 1 more
+       *[other] and { $n } more
+    }
+dup-trashed =
+    { $count ->
+        [one] 1 copy moved to the trash
+       *[other] { $n } copies moved to the trash
+    }
+dup-linked =
+    { $count ->
+        [one] 1 copy replaced with a hard link
+       *[other] { $n } copies replaced with hard links
+    }
+dup-failed = { $count } failed: { $error }
 dup-hint = Finds files with identical content in the current folder. Files are matched by size, then by a quick fingerprint of their start and end, and only then by a full content hash. Hard links are ignored because they already share space.
 
 ## Settings, updates and polish

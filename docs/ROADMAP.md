@@ -47,8 +47,10 @@ shared foundations the later items build on.
 - Export search results in every report format. *(Done for CSV and the
   clipboard; more formats come with Phase 4.)*
 - Duplicate finder: optional SHA-256 output, keep/remove rules per group.
+  *(Done, with bulk move to trash and CSV export.)*
 - Replace duplicates with hard links (NTFS and Unix filesystems), after
-  confirmation, with a dry run first.
+  confirmation, with a dry run first. *(Done: the confirmation lists every
+  change, and each pair is compared byte by byte before it is replaced.)*
 
 ## Phase 3 — Acting on files
 

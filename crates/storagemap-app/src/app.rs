@@ -75,6 +75,11 @@ pub enum Action {
     BrowseSnapshot,
     ClearComparison,
     SetDuplicateMinSize(u64),
+    SetDuplicateSha256(bool),
+    /// Saves the found duplicate groups as CSV.
+    ExportDuplicates,
+    /// Shows a message; the text is already in visual order.
+    Notify(String, bool),
     /// Show or hide a column of a table: (table id, column title id).
     ToggleColumn(&'static str, &'static str),
     /// A table's full column order, as title ids.
@@ -260,8 +265,9 @@ impl App {
                             view.tab = tab;
                             if tab == Tab::Duplicates {
                                 let min = self.settings.duplicate_min_size;
+                                let sha = self.settings.duplicate_sha256;
                                 if let Err(err) =
-                                    views::duplicates::start_search(&mut view, min, ctx)
+                                    views::duplicates::start_search(&mut view, min, sha, ctx)
                                 {
                                     tracing::warn!(%err, "cannot start duplicate search");
                                 }
@@ -485,6 +491,9 @@ impl App {
             }
             Action::ClearComparison => self.with_scan(|s| s.comparison = None),
             Action::SetDuplicateMinSize(size) => self.settings.duplicate_min_size = size,
+            Action::SetDuplicateSha256(on) => self.settings.duplicate_sha256 = on,
+            Action::ExportDuplicates => self.export_duplicates(),
+            Action::Notify(text, is_error) => self.notify(text, is_error),
             Action::ToggleColumn(table, column) => self.settings.toggle_column(table, column),
             Action::SetColumnOrder(table, order) => {
                 let order = order.into_iter().map(str::to_owned).collect();
@@ -674,6 +683,42 @@ impl App {
             Err(e) => self
                 .i18n
                 .ta("export-failed", &[("error", e.to_string().into())]),
+        };
+        self.notify(text, result.is_err());
+    }
+
+    fn export_duplicates(&mut self) {
+        let Some(scan) = &self.scan else { return };
+        let Some(target) = rfd::FileDialog::new()
+            .set_title(self.i18n.logical("action-export-csv"))
+            .set_file_name("storagemap-duplicates.csv")
+            .add_filter("CSV", &["csv"])
+            .save_file()
+        else {
+            return;
+        };
+        let (i, unit) = (&self.i18n, self.settings.unit);
+        let readable_fmt = |bytes: u64| fmt::size(bytes, unit, 1, |k| i.logical(k));
+        let readable = self
+            .settings
+            .export_readable
+            .then_some(&readable_fmt as &dyn Fn(u64) -> String);
+        let headers = [
+            i.logical("dup-col-group"),
+            "SHA-256".to_owned(),
+            i.logical("col-path"),
+            i.logical(if readable.is_some() {
+                "col-size"
+            } else {
+                "csv-bytes"
+            }),
+            i.logical("csv-modified-utc"),
+        ];
+        let result = std::fs::File::create(&target)
+            .and_then(|f| views::duplicates::export(scan, headers, readable, f));
+        let text = match &result {
+            Ok(()) => i.ta("exported", &[("path", target.display().to_string().into())]),
+            Err(e) => i.ta("export-failed", &[("error", e.to_string().into())]),
         };
         self.notify(text, result.is_err());
     }
