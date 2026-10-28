@@ -172,12 +172,12 @@ pub fn run(args: &Args) -> ExitCode {
     }
     if let Some(csv) = &args.csv {
         let written = std::fs::File::create(csv).and_then(|f| {
-            export::write_csv(
+            export::write_tree(
                 tree,
                 tree.root(),
                 args.depth.unwrap_or(DEFAULT_CSV_DEPTH),
-                &export::CsvLabels::default(),
-                f,
+                &export::ReportLabels::default(),
+                &mut export::Delimited::csv(f),
             )
         });
         if let Err(e) = written {

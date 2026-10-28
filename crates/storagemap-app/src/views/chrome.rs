@@ -988,6 +988,13 @@ fn export_options(app: &mut App, ctx: &egui::Context) {
                 if ui.add(theme::primary_button(i.t("export-save"))).clicked() {
                     actions.push(Action::ConfirmExport);
                 }
+                if ui
+                    .button(format!("{}  {}", crate::icons::COPY, i.t("export-copy")))
+                    .on_hover_text(i.t("export-copy-hint"))
+                    .clicked()
+                {
+                    actions.push(Action::CopyReport);
+                }
                 if ui.button(i.t("cancel")).clicked() {
                     actions.push(Action::CancelExport);
                 }

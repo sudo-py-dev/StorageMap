@@ -1,5 +1,6 @@
-//! CSV export of a scanned subtree.
+//! Reports of a scanned subtree: one row model, several output formats.
 
+use std::borrow::Cow;
 use std::io::{self, Write};
 
 use crate::tree::{Kind, Metric, NodeId, Tree};
@@ -27,26 +28,43 @@ impl Include {
     }
 }
 
-/// The report's human-facing text, so the GUI can write it in the user's
-/// language. `Default` is the stable English, machine-friendly form.
-pub struct CsvLabels<'a> {
+/// One cell of a report row. Writers decide how each kind is written, so
+/// the same report can become CSV, a spreadsheet or a web page.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Value<'a> {
+    Text(Cow<'a, str>),
+    /// A size in bytes.
+    Bytes(u64),
+    Count(u64),
+    /// A fraction in `0.0..=1.0`.
+    Share(f64),
+    /// Unix seconds.
+    Date(i64),
+}
+
+/// Receives a report row by row, so even multi-million row reports stream
+/// without being held in memory.
+pub trait ReportWriter {
+    fn header(&mut self, titles: &[String]) -> io::Result<()>;
+    fn row(&mut self, values: &[Value<'_>]) -> io::Result<()>;
+    fn finish(&mut self) -> io::Result<()>;
+}
+
+/// The tree report's human-facing text, so the GUI can write it in the
+/// user's language. `Default` is the stable English, machine-friendly form.
+pub struct ReportLabels {
     /// Column titles: path, type, size, allocated, files, folders,
     /// percent of parent, modified (UTC).
     pub headers: [String; 8],
     /// Type names: folder, file, link, other.
     pub kinds: [String; 4],
-    /// Writes the size columns with this instead of as exact byte counts.
-    pub readable_size: Option<&'a dyn Fn(u64) -> String>,
     /// Which rows to write.
     pub include: Include,
-    /// Start with a UTF-8 byte order mark: Excel needs it to show
-    /// non-Latin names correctly.
-    pub bom: bool,
 }
 
-impl Default for CsvLabels<'_> {
+impl Default for ReportLabels {
     fn default() -> Self {
-        CsvLabels {
+        ReportLabels {
             headers: [
                 "path",
                 "type",
@@ -59,28 +77,21 @@ impl Default for CsvLabels<'_> {
             ]
             .map(str::to_owned),
             kinds: ["folder", "file", "link", "other"].map(str::to_owned),
-            readable_size: None,
             include: Include::All,
-            bom: false,
         }
     }
 }
 
 /// Writes `root` and its descendants down to `max_depth` levels (0 = only
-/// `root`) as RFC 4180 CSV.
-pub fn write_csv<W: Write>(
+/// `root`) to `writer`.
+pub fn write_tree(
     tree: &Tree,
     root: NodeId,
     max_depth: usize,
-    labels: &CsvLabels,
-    out: W,
+    labels: &ReportLabels,
+    writer: &mut dyn ReportWriter,
 ) -> io::Result<()> {
-    let mut out = io::BufWriter::new(out);
-    if labels.bom {
-        out.write_all("\u{FEFF}".as_bytes())?;
-    }
-    let header: Vec<String> = labels.headers.iter().map(|h| csv_field(h)).collect();
-    writeln!(out, "{}", header.join(","))?;
+    writer.header(&labels.headers)?;
     let base_depth = tree.depth(root);
     let mut stack = vec![root];
     while let Some(id) = stack.pop() {
@@ -91,37 +102,108 @@ pub fn write_csv<W: Write>(
         if !labels.include.accepts(node.kind) {
             continue;
         }
-        let size = |bytes: u64| match labels.readable_size {
-            Some(readable) => csv_field(&readable(bytes)),
-            None => bytes.to_string(),
-        };
         let kind = &labels.kinds[match node.kind {
             Kind::Dir => 0,
             Kind::File => 1,
             Kind::Symlink => 2,
             Kind::Other => 3,
         }];
-        writeln!(
-            out,
-            "{},{},{},{},{},{},{:.2},{}",
-            csv_field(&tree.path(id).to_string_lossy()),
-            csv_field(kind),
-            size(node.size),
-            size(node.allocated),
-            node.files,
-            node.dirs,
-            tree.share_of_parent(id, Metric::Size) * 100.0,
-            iso_date(node.modified),
-        )?;
+        writer.row(&[
+            Value::Text(tree.path(id).to_string_lossy()),
+            Value::Text(Cow::Borrowed(kind)),
+            Value::Bytes(node.size),
+            Value::Bytes(node.allocated),
+            Value::Count(node.files),
+            Value::Count(node.dirs),
+            Value::Share(tree.share_of_parent(id, Metric::Size)),
+            Value::Date(node.modified),
+        ])?;
     }
-    out.flush()
+    writer.finish()
 }
 
-fn csv_field(s: &str) -> String {
-    if s.contains([',', '"', '\n', '\r']) {
-        format!("\"{}\"", s.replace('"', "\"\""))
-    } else {
-        s.to_owned()
+/// Delimited text: RFC 4180 CSV, or tab-separated text that pastes into
+/// spreadsheets.
+pub struct Delimited<'a, W: Write> {
+    out: io::BufWriter<W>,
+    separator: char,
+    readable_size: Option<&'a dyn Fn(u64) -> String>,
+    bom: bool,
+}
+
+impl<'a, W: Write> Delimited<'a, W> {
+    pub fn csv(out: W) -> Self {
+        Delimited {
+            out: io::BufWriter::new(out),
+            separator: ',',
+            readable_size: None,
+            bom: false,
+        }
+    }
+
+    pub fn tsv(out: W) -> Self {
+        Delimited {
+            separator: '\t',
+            ..Delimited::csv(out)
+        }
+    }
+
+    /// Writes sizes with `f` instead of as exact byte counts.
+    pub fn readable_sizes(mut self, f: &'a dyn Fn(u64) -> String) -> Self {
+        self.readable_size = Some(f);
+        self
+    }
+
+    /// Starts with a UTF-8 byte order mark: Excel needs it to show non-Latin
+    /// names correctly.
+    pub fn with_bom(mut self) -> Self {
+        self.bom = true;
+        self
+    }
+
+    fn field(&self, s: &str) -> String {
+        if s.contains([self.separator, '"', '\n', '\r']) {
+            format!("\"{}\"", s.replace('"', "\"\""))
+        } else {
+            s.to_owned()
+        }
+    }
+
+    fn line(&mut self, fields: &[String]) -> io::Result<()> {
+        let mut sep = [0u8; 4];
+        let sep = self.separator.encode_utf8(&mut sep);
+        writeln!(self.out, "{}", fields.join(sep))
+    }
+}
+
+impl<W: Write> ReportWriter for Delimited<'_, W> {
+    fn header(&mut self, titles: &[String]) -> io::Result<()> {
+        if self.bom {
+            self.out.write_all("\u{FEFF}".as_bytes())?;
+        }
+        let fields: Vec<String> = titles.iter().map(|t| self.field(t)).collect();
+        self.line(&fields)
+    }
+
+    fn row(&mut self, values: &[Value<'_>]) -> io::Result<()> {
+        let fields: Vec<String> = values
+            .iter()
+            .map(|v| match v {
+                Value::Text(s) => self.field(s),
+                Value::Bytes(b) => match self.readable_size {
+                    Some(readable) => self.field(&readable(*b)),
+                    None => b.to_string(),
+                },
+                Value::Count(n) => n.to_string(),
+                Value::Share(f) => format!("{:.2}", f * 100.0),
+                Value::Date(secs) => iso_date(*secs),
+            })
+            .collect();
+        self.line(&fields)
+    }
+
+    fn finish(&mut self) -> io::Result<()> {
+        self.out.flush()
     }
 }
 
@@ -164,10 +246,14 @@ mod tests {
     }
 
     #[test]
-    fn quotes_awkward_paths() {
-        assert_eq!(csv_field("a,b"), "\"a,b\"");
-        assert_eq!(csv_field("say \"hi\""), "\"say \"\"hi\"\"\"");
-        assert_eq!(csv_field("plain"), "plain");
+    fn quotes_awkward_fields() {
+        let csv = Delimited::csv(Vec::new());
+        assert_eq!(csv.field("a,b"), "\"a,b\"");
+        assert_eq!(csv.field("say \"hi\""), "\"say \"\"hi\"\"\"");
+        assert_eq!(csv.field("plain"), "plain");
+        let tsv = Delimited::tsv(Vec::new());
+        assert_eq!(tsv.field("a,b"), "a,b");
+        assert_eq!(tsv.field("a\tb"), "\"a\tb\"");
     }
 
     #[test]
@@ -193,7 +279,9 @@ mod tests {
         );
         let t = b.finish();
         let mut buf = Vec::new();
-        write_csv(&t, t.root(), 1, &CsvLabels::default(), &mut buf).expect("csv");
+        let mut csv = Delimited::csv(&mut buf);
+        write_tree(&t, t.root(), 1, &ReportLabels::default(), &mut csv).expect("csv");
+        drop(csv);
         let text = String::from_utf8(buf).expect("utf8");
         assert_eq!(text.lines().count(), 3); // header, root, d
     }
@@ -219,9 +307,11 @@ mod tests {
         b.finish()
     }
 
-    fn render(t: &Tree, labels: &CsvLabels) -> String {
+    fn render(t: &Tree, labels: &ReportLabels) -> String {
         let mut buf = Vec::new();
-        write_csv(t, t.root(), 8, labels, &mut buf).expect("csv");
+        let mut csv = Delimited::csv(&mut buf);
+        write_tree(t, t.root(), 8, labels, &mut csv).expect("csv");
+        drop(csv);
         String::from_utf8(buf).expect("utf8")
     }
 
@@ -229,14 +319,18 @@ mod tests {
     fn localised_labels() {
         let t = sample();
         let readable = |n: u64| format!("{} KB", n / 1024);
-        let labels = CsvLabels {
+        let labels = ReportLabels {
             headers: ["נתיב", "סוג", "גודל", "b", "c", "d", "e", "f"].map(str::to_owned),
             kinds: ["תיקייה", "קובץ", "קישור", "אחר"].map(str::to_owned),
-            readable_size: Some(&readable),
             include: Include::All,
-            bom: true,
         };
-        let text = render(&t, &labels);
+        let mut buf = Vec::new();
+        let mut csv = Delimited::csv(&mut buf)
+            .readable_sizes(&readable)
+            .with_bom();
+        write_tree(&t, t.root(), 8, &labels, &mut csv).expect("csv");
+        drop(csv);
+        let text = String::from_utf8(buf).expect("utf8");
         let mut lines = text.lines();
         assert_eq!(lines.next(), Some("\u{FEFF}נתיב,סוג,גודל,b,c,d,e,f"));
         assert!(lines.next().expect("row").starts_with("/r,תיקייה,"));
@@ -249,9 +343,9 @@ mod tests {
         let only = |include| {
             let text = render(
                 &t,
-                &CsvLabels {
+                &ReportLabels {
                     include,
-                    ..CsvLabels::default()
+                    ..ReportLabels::default()
                 },
             );
             text.lines()

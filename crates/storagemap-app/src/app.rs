@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use egui::Ui;
+use storagemap_core::export::{self, Delimited, ReportLabels};
 use storagemap_core::snapshot::{self, Comparison, DEFAULT_MIN_FILE_SIZE, Snapshot};
 use storagemap_core::{NodeId, ScanOptions, volumes};
 
@@ -24,6 +25,9 @@ const VOLUME_REFRESH: Duration = Duration::from_secs(5);
 const MAX_SNAPSHOTS_PER_FOLDER: usize = 30;
 /// Folder depth exported to CSV.
 const CSV_EXPORT_DEPTH: usize = 64;
+/// The clipboard gets the focused folder and its direct contents, like the
+/// details table: whole-drive reports are too large to paste.
+const CLIPBOARD_DEPTH: usize = 1;
 
 /// Something the user asked for; applied after the frame is drawn.
 #[derive(Debug, Clone, PartialEq)]
@@ -46,6 +50,8 @@ pub enum Action {
     /// Opens the export options; `ConfirmExport` then asks where to save.
     ExportCsv,
     ConfirmExport,
+    /// Copies the export as tab-separated text instead of saving it.
+    CopyReport,
     CancelExport,
     SetLang(Option<Lang>),
     RunAsAdmin,
@@ -312,6 +318,10 @@ impl App {
                 self.show_export = false;
                 self.export_csv();
             }
+            Action::CopyReport => {
+                self.show_export = false;
+                self.copy_report(ctx);
+            }
             Action::SetLang(lang) => {
                 self.settings.lang = lang;
                 self.i18n = I18n::new(self.settings.effective_lang());
@@ -448,26 +458,15 @@ impl App {
         }
     }
 
-    fn export_csv(&mut self) {
-        let Some(scan) = &self.scan else { return };
-        let Some(target) = rfd::FileDialog::new()
-            .set_title(self.i18n.logical("action-export-csv"))
-            .set_file_name("storagemap.csv")
-            .add_filter("CSV", &["csv"])
-            .save_file()
-        else {
-            return;
-        };
+    /// The tree report's titles and type names in the user's language.
+    fn report_labels(&self) -> ReportLabels {
         let i = &self.i18n;
-        let unit = self.settings.unit;
-        let readable_fmt = |bytes: u64| fmt::size(bytes, unit, 1, |k| i.logical(k));
-        let readable = self.settings.export_readable;
-        let (size_id, allocated_id) = if readable {
+        let (size_id, allocated_id) = if self.settings.export_readable {
             ("col-size", "col-allocated")
         } else {
             ("csv-bytes", "csv-allocated-bytes")
         };
-        let labels = storagemap_core::export::CsvLabels {
+        ReportLabels {
             headers: [
                 "col-path",
                 "col-type",
@@ -480,13 +479,54 @@ impl App {
             ]
             .map(|id| i.logical(id)),
             kinds: ["type-folder", "type-file", "type-link", "type-other"].map(|id| i.logical(id)),
-            readable_size: readable.then_some(&readable_fmt as &dyn Fn(u64) -> String),
             include: self.settings.export_include,
-            bom: true,
+        }
+    }
+
+    /// Writes the focused folder's report as CSV, or as tab-separated text
+    /// when `tsv` is set.
+    fn write_report(
+        &self,
+        depth: usize,
+        out: impl std::io::Write,
+        tsv: bool,
+    ) -> std::io::Result<()> {
+        let Some(scan) = &self.scan else {
+            return Ok(());
         };
-        let result = std::fs::File::create(&target).and_then(|f| {
-            storagemap_core::export::write_csv(&scan.tree, scan.focus, CSV_EXPORT_DEPTH, &labels, f)
-        });
+        let (i, unit) = (&self.i18n, self.settings.unit);
+        let readable_fmt = |bytes: u64| fmt::size(bytes, unit, 1, |k| i.logical(k));
+        let mut writer = if tsv {
+            Delimited::tsv(out)
+        } else {
+            Delimited::csv(out).with_bom()
+        };
+        if self.settings.export_readable {
+            writer = writer.readable_sizes(&readable_fmt);
+        }
+        export::write_tree(
+            &scan.tree,
+            scan.focus,
+            depth,
+            &self.report_labels(),
+            &mut writer,
+        )
+    }
+
+    fn export_csv(&mut self) {
+        if self.scan.is_none() {
+            return;
+        }
+        let Some(target) = rfd::FileDialog::new()
+            .set_title(self.i18n.logical("action-export-csv"))
+            .set_file_name("storagemap.csv")
+            .add_filter("CSV", &["csv"])
+            .save_file()
+        else {
+            return;
+        };
+        let result = std::fs::File::create(&target)
+            .and_then(|f| self.write_report(CSV_EXPORT_DEPTH, f, false));
         let text = match &result {
             Ok(()) => self
                 .i18n
@@ -496,6 +536,25 @@ impl App {
                 .ta("export-failed", &[("error", e.to_string().into())]),
         };
         self.notify(text, result.is_err());
+    }
+
+    /// Copies the focused folder and its direct contents as tab-separated
+    /// text, which pastes into spreadsheets as a table.
+    fn copy_report(&mut self, ctx: &egui::Context) {
+        let mut buf = Vec::new();
+        let result = self.write_report(CLIPBOARD_DEPTH, &mut buf, true);
+        match result {
+            Ok(()) => {
+                ctx.copy_text(String::from_utf8_lossy(&buf).into_owned());
+                self.notify(self.i18n.t("report-copied"), false);
+            }
+            Err(e) => {
+                let text = self
+                    .i18n
+                    .ta("export-failed", &[("error", e.to_string().into())]);
+                self.notify(text, true);
+            }
+        }
     }
 
     /// Lists earlier snapshots of the scanned folder and compares with the
