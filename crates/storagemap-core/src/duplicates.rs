@@ -3,11 +3,14 @@
 //! Staged so most files are never read in full: group by exact size, then by
 //! a BLAKE3 hash of the first and last 16 KiB, and only then hash whole files
 //! that still collide. Hard links are excluded (they share data already).
+//!
+//! Also: SHA-256 checksums of confirmed groups, rules for which copy to keep,
+//! and replacing a copy with a hard link to the one kept.
 
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 
 use rayon::prelude::*;
@@ -34,6 +37,8 @@ pub struct Candidate {
 pub struct DuplicateGroup {
     pub size: u64,
     pub files: Vec<NodeId>,
+    /// SHA-256 of the content, when requested (see [`add_sha256`]).
+    pub sha256: Option<[u8; 32]>,
 }
 
 impl DuplicateGroup {
@@ -113,6 +118,7 @@ pub fn find(candidates: &[Candidate], progress: &DuplicateProgress) -> Vec<Dupli
             DuplicateGroup {
                 size: g[0].size,
                 files,
+                sha256: None,
             }
         })
         .collect();
@@ -176,6 +182,139 @@ fn full_hash(c: &Candidate) -> HashResult {
     let mut hasher = blake3::Hasher::new();
     hasher.update_reader(File::open(&c.path)?)?;
     Ok((*hasher.finalize().as_bytes(), c.size))
+}
+
+/// Computes each group's SHA-256 (from one of its files, since they are
+/// identical) in parallel. `candidates` gives the files' paths.
+pub fn add_sha256(
+    groups: &mut [DuplicateGroup],
+    candidates: &[Candidate],
+    progress: &DuplicateProgress,
+) {
+    let paths: HashMap<NodeId, &Path> = candidates
+        .iter()
+        .map(|c| (c.id, c.path.as_path()))
+        .collect();
+    groups.par_iter_mut().for_each(|g| {
+        if progress.is_cancelled() {
+            return;
+        }
+        let Some(path) = g.files.iter().find_map(|f| paths.get(f)) else {
+            return;
+        };
+        match sha256_of(path) {
+            Ok(digest) => {
+                progress.bytes_hashed.fetch_add(g.size, Relaxed);
+                g.sha256 = Some(digest);
+            }
+            Err(err) => {
+                tracing::debug!(path = %path.display(), %err, "cannot checksum file");
+                progress.errors.fetch_add(1, Relaxed);
+            }
+        }
+    });
+}
+
+pub fn sha256_of(path: &Path) -> io::Result<[u8; 32]> {
+    use sha2::{Digest, Sha256};
+    let mut file = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1024 * 1024];
+    loop {
+        match file.read(&mut buf)? {
+            0 => break,
+            n => hasher.update(&buf[..n]),
+        }
+    }
+    Ok(hasher.finalize().into())
+}
+
+/// Lower-case hex, as checksum tools print it.
+pub fn hex(digest: &[u8; 32]) -> String {
+    digest.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Which copy of a duplicate group to keep.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Keep {
+    /// The most recently modified.
+    Newest,
+    /// The least recently modified, usually the original.
+    Oldest,
+    /// The one with the shortest path, usually the least nested.
+    ShortestPath,
+}
+
+impl Keep {
+    pub const ALL: [Keep; 3] = [Keep::Newest, Keep::Oldest, Keep::ShortestPath];
+}
+
+/// The file of `files` to keep under `rule`; ties go to the lowest id, so
+/// the choice is stable.
+pub fn keeper(tree: &Tree, files: &[NodeId], rule: Keep) -> Option<NodeId> {
+    let key = |id: NodeId| -> i64 {
+        match rule {
+            Keep::Newest => -tree.node(id).modified,
+            Keep::Oldest => tree.node(id).modified,
+            Keep::ShortestPath => tree.path(id).as_os_str().len() as i64,
+        }
+    };
+    files.iter().copied().min_by_key(|&id| (key(id), id))
+}
+
+/// Replaces `duplicate` with a hard link to `keep`, after checking byte by
+/// byte that both still have the same content. The duplicate is swapped
+/// in one rename, so it is never missing. Both must be on one filesystem.
+pub fn replace_with_hard_link(keep: &Path, duplicate: &Path) -> io::Result<()> {
+    if same_file(keep, duplicate)? {
+        return Ok(());
+    }
+    if !same_content(keep, duplicate)? {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "the files are no longer identical",
+        ));
+    }
+    let name = duplicate
+        .file_name()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no file name"))?;
+    let mut temp_name = std::ffi::OsString::from(".");
+    temp_name.push(name);
+    temp_name.push(".storagemap-link");
+    let temp = duplicate.with_file_name(temp_name);
+    std::fs::hard_link(keep, &temp)?;
+    std::fs::rename(&temp, duplicate).inspect_err(|_| {
+        let _ = std::fs::remove_file(&temp);
+    })
+}
+
+#[cfg(unix)]
+fn same_file(a: &Path, b: &Path) -> io::Result<bool> {
+    use std::os::unix::fs::MetadataExt;
+    let (ma, mb) = (std::fs::metadata(a)?, std::fs::metadata(b)?);
+    Ok(ma.dev() == mb.dev() && ma.ino() == mb.ino())
+}
+
+#[cfg(not(unix))]
+fn same_file(a: &Path, b: &Path) -> io::Result<bool> {
+    Ok(std::fs::canonicalize(a)? == std::fs::canonicalize(b)?)
+}
+
+fn same_content(a: &Path, b: &Path) -> io::Result<bool> {
+    let (mut fa, mut fb) = (File::open(a)?, File::open(b)?);
+    if fa.metadata()?.len() != fb.metadata()?.len() {
+        return Ok(false);
+    }
+    let (mut ba, mut bb) = (vec![0u8; 1024 * 1024], vec![0u8; 1024 * 1024]);
+    loop {
+        let n = read_up_to(&mut fa, &mut ba)?;
+        if read_up_to(&mut fb, &mut bb[..n])? != n || ba[..n] != bb[..n] {
+            return Ok(false);
+        }
+        if n < ba.len() {
+            return Ok(true);
+        }
+    }
 }
 
 fn read_up_to(file: &mut File, buf: &mut [u8]) -> io::Result<usize> {
@@ -261,6 +400,76 @@ mod tests {
         assert_eq!(names(&t, &groups[0]), ["a.bin", "b.bin"]);
         assert_eq!(groups[0].wasted(), 100 * 1024);
         assert_eq!(names(&t, &groups[1]), ["e.txt", "f.txt"]);
+    }
+
+    #[test]
+    fn sha256_matches_known_digest() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let t = tree_of(
+            dir.path(),
+            &[("a", b"abc".to_vec()), ("b", b"abc".to_vec())],
+        );
+        let cands = candidates(&t, t.root(), 1);
+        let progress = DuplicateProgress::default();
+        let mut groups = find(&cands, &progress);
+        add_sha256(&mut groups, &cands, &progress);
+        assert_eq!(
+            hex(&groups[0].sha256.expect("checksum")),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn keep_rules_pick_one_copy() {
+        let dir_info = EntryInfo {
+            kind: Kind::Dir,
+            flags: Flags::empty(),
+            modified: 0,
+            accessed: 0,
+            created: 0,
+            owner: crate::NO_OWNER,
+            size: 0,
+            allocated: 0,
+        };
+        let file = |modified| EntryInfo {
+            kind: Kind::File,
+            modified,
+            size: 1,
+            ..dir_info
+        };
+        let mut b = TreeBuilder::new(PathBuf::from("/r"), dir_info);
+        let deep = b.push(NodeId::ROOT, b"deep", dir_info);
+        let old = b.push(deep, b"old", file(10));
+        let new = b.push(NodeId::ROOT, b"new", file(50));
+        let mid = b.push(NodeId::ROOT, b"mid-long-name", file(30));
+        let t = b.finish();
+        let files = [old, new, mid];
+        assert_eq!(keeper(&t, &files, Keep::Newest), Some(new));
+        assert_eq!(keeper(&t, &files, Keep::Oldest), Some(old));
+        assert_eq!(keeper(&t, &files, Keep::ShortestPath), Some(new));
+        assert_eq!(keeper(&t, &[], Keep::Newest), None);
+    }
+
+    #[test]
+    fn hard_link_replaces_only_identical_copies() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (keep, dup, other) = (
+            dir.path().join("keep"),
+            dir.path().join("dup"),
+            dir.path().join("other"),
+        );
+        std::fs::write(&keep, b"same data").expect("write");
+        std::fs::write(&dup, b"same data").expect("write");
+        std::fs::write(&other, b"diff data").expect("write");
+        replace_with_hard_link(&keep, &dup).expect("link");
+        assert!(same_file(&keep, &dup).expect("stat"));
+        assert_eq!(std::fs::read(&dup).expect("read"), b"same data");
+        // Linking again is a no-op; different content is refused.
+        replace_with_hard_link(&keep, &dup).expect("again");
+        assert!(replace_with_hard_link(&keep, &other).is_err());
+        assert_eq!(std::fs::read(&other).expect("read"), b"diff data");
+        let leftovers = std::fs::read_dir(dir.path()).expect("list").count();
+        assert_eq!(leftovers, 3);
     }
 
     #[test]

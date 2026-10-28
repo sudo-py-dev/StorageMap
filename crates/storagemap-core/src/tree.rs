@@ -260,6 +260,25 @@ impl Tree {
         }
     }
 
+    /// Marks a file that now shares its data with another file (it was
+    /// replaced by a hard link), so its size no longer counts in its folders.
+    pub fn mark_linked(&mut self, id: NodeId) {
+        let node = &self.nodes[id.index()];
+        if node.kind == Kind::Dir || node.flags.contains(Flags::HARDLINK_DUP) {
+            return;
+        }
+        let gone = node.clone();
+        self.nodes[id.index()].flags.insert(Flags::HARDLINK_DUP);
+        let mut cur = self.parent(id);
+        while let Some(p) = cur {
+            let n = &mut self.nodes[p.index()];
+            n.size = n.size.saturating_sub(gone.size);
+            n.allocated = n.allocated.saturating_sub(gone.allocated);
+            n.files = n.files.saturating_sub(gone.files);
+            cur = self.parent(p);
+        }
+    }
+
     /// Visits `root` and every live descendant (depth first).
     pub fn walk(&self, root: NodeId) -> impl Iterator<Item = NodeId> + '_ {
         let mut stack = vec![root];
@@ -463,6 +482,20 @@ mod tests {
         dup.flags = Flags::HARDLINK_DUP;
         b.push(NodeId::ROOT, b"link", dup);
         b.finish()
+    }
+
+    #[test]
+    fn a_linked_file_stops_counting() {
+        let mut b = TreeBuilder::new(PathBuf::from("/r"), dir());
+        let d = b.push(NodeId::ROOT, b"d", dir());
+        let f = b.push(d, b"f", file(10));
+        b.push(d, b"g", file(5));
+        let mut t = b.finish();
+        t.mark_linked(f);
+        assert_eq!(t.node(t.root()).size, 5);
+        assert_eq!(t.node(d).files, 1);
+        t.mark_linked(f);
+        assert_eq!(t.node(t.root()).size, 5);
     }
 
     #[test]
