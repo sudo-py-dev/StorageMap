@@ -48,6 +48,8 @@ struct Meta {
     size: u64,
     allocated: u64,
     modified: i64,
+    accessed: i64,
+    created: i64,
     attributes: u32,
     in_use: bool,
     is_dir: bool,
@@ -274,6 +276,8 @@ fn merge(table: &mut Table, chunk: ChunkOut) {
             meta.in_use = true;
             meta.is_dir = rec.is_dir;
             meta.modified = rec.modified;
+            meta.accessed = rec.accessed;
+            meta.created = rec.created;
             meta.attributes = rec.attributes;
         }
         meta.size = meta.size.max(rec.size);
@@ -379,6 +383,8 @@ fn build(root: &Path, table: &Table, children: &Children, start: u32, filter: &M
             kind,
             flags,
             modified: m.modified,
+            accessed: m.accessed,
+            created: m.created,
             size: if m.is_dir { 0 } else { m.size },
             allocated: m.allocated,
         }

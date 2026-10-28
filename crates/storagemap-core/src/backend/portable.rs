@@ -62,6 +62,8 @@ impl Platform for Portable {
                 kind,
                 flags: walk::dot_hidden(&name),
                 modified: modified(&meta),
+                accessed: unix_secs(meta.accessed()),
+                created: unix_secs(meta.created()),
                 size,
                 allocated: size,
             };
@@ -76,8 +78,11 @@ impl Platform for Portable {
 }
 
 fn modified(meta: &Metadata) -> i64 {
-    meta.modified()
-        .ok()
+    unix_secs(meta.modified())
+}
+
+fn unix_secs(time: io::Result<std::time::SystemTime>) -> i64 {
+    time.ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map_or(0, |d| d.as_secs() as i64)
 }

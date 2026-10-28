@@ -25,7 +25,9 @@ const STATX_MASK: StatxFlags = StatxFlags::TYPE
     .union(StatxFlags::BLOCKS)
     .union(StatxFlags::INO)
     .union(StatxFlags::NLINK)
-    .union(StatxFlags::MTIME);
+    .union(StatxFlags::MTIME)
+    .union(StatxFlags::ATIME)
+    .union(StatxFlags::BTIME);
 const STAT_FLAGS: AtFlags = AtFlags::SYMLINK_NOFOLLOW.union(AtFlags::STATX_DONT_SYNC);
 const DIR_FLAGS: OFlags = OFlags::RDONLY
     .union(OFlags::DIRECTORY)
@@ -104,6 +106,8 @@ impl Platform for Linux {
                         kind: kind_of(entry.file_type()),
                         flags: Flags::ERROR,
                         modified: 0,
+                        accessed: 0,
+                        created: 0,
                         size: 0,
                         allocated: 0,
                     },
@@ -132,6 +136,13 @@ impl Linux {
                 kind,
                 flags,
                 modified: st.stx_mtime.tv_sec,
+                accessed: st.stx_atime.tv_sec,
+                // Not every filesystem records creation (birth) time.
+                created: if StatxFlags::from_bits_retain(st.stx_mask).contains(StatxFlags::BTIME) {
+                    st.stx_btime.tv_sec
+                } else {
+                    0
+                },
                 size: if kind == Kind::Dir { 0 } else { st.stx_size },
                 allocated: st.stx_blocks * BLOCK_UNIT,
             },

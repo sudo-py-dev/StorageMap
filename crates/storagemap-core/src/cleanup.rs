@@ -206,6 +206,8 @@ mod tests {
             kind: Kind::Dir,
             flags: Flags::empty(),
             modified: NOW,
+            accessed: 0,
+            created: 0,
             size: 0,
             allocated: 0,
         }
@@ -216,6 +218,8 @@ mod tests {
             kind: Kind::File,
             flags: Flags::empty(),
             modified,
+            accessed: 0,
+            created: 0,
             size,
             allocated: size,
         }

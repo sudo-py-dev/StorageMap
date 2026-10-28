@@ -192,6 +192,8 @@ pub(crate) fn dir_info(modified: i64, allocated: u64) -> EntryInfo {
         kind: Kind::Dir,
         flags: Flags::empty(),
         modified,
+        accessed: 0,
+        created: 0,
         size: 0,
         allocated,
     }
@@ -235,6 +237,8 @@ mod tests {
                     kind,
                     flags: Flags::empty(),
                     modified: 1,
+                    accessed: 0,
+                    created: 0,
                     size,
                     allocated: size,
                 };

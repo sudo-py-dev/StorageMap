@@ -80,6 +80,8 @@ pub struct Record {
     pub allocated: u64,
     /// Unix seconds.
     pub modified: i64,
+    pub accessed: i64,
+    pub created: i64,
     pub attributes: u32,
     pub has_std_info: bool,
     /// Unnamed `$DATA` runs as `(lowest_vcn, runs)`; only when requested.
@@ -98,6 +100,8 @@ impl Record {
         self.data_runs.extend(ext.data_runs);
         if !self.has_std_info && ext.has_std_info {
             self.modified = ext.modified;
+            self.accessed = ext.accessed;
+            self.created = ext.created;
             self.attributes = ext.attributes;
             self.has_std_info = true;
         }
@@ -176,7 +180,10 @@ fn parse_attribute(
     match (attr_type, non_resident) {
         (ATTR_STANDARD_INFORMATION, false) => {
             let v = resident_value(attr)?;
+            // Creation, modification, MFT change and access times.
+            rec.created = filetime_to_unix(u64_at(v, 0)?);
             rec.modified = filetime_to_unix(u64_at(v, 8)?);
+            rec.accessed = filetime_to_unix(u64_at(v, 24)?);
             rec.attributes = u32_at(v, 32)?;
             rec.has_std_info = true;
         }
@@ -409,8 +416,12 @@ mod tests {
     }
 
     fn std_info(filetime: u64, attrs: u32) -> Vec<u8> {
+        // Creation one second earlier, access one second later.
+        let tick = FILETIME_TICKS_PER_SEC;
         let mut v = vec![0u8; 48];
+        v[0..8].copy_from_slice(&(filetime - tick).to_le_bytes());
         v[8..16].copy_from_slice(&filetime.to_le_bytes());
+        v[24..32].copy_from_slice(&(filetime + tick).to_le_bytes());
         v[32..36].copy_from_slice(&attrs.to_le_bytes());
         resident(ATTR_STANDARD_INFORMATION, 0, &v)
     }
@@ -440,6 +451,8 @@ mod tests {
         assert_eq!(r.size, 5);
         assert_eq!(r.allocated, 0);
         assert_eq!(r.modified, 1_577_836_800);
+        assert_eq!(r.created, 1_577_836_799);
+        assert_eq!(r.accessed, 1_577_836_801);
         assert_eq!(r.attributes, 0x20);
     }
 

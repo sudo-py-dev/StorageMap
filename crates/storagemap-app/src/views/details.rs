@@ -21,6 +21,8 @@ pub enum SortBy {
     Folders,
     Modified,
     Type,
+    Accessed,
+    Created,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,7 +41,7 @@ impl Default for Sort {
 }
 
 /// Columns in logical order and what each sorts by.
-const COLUMNS: [(Col, Option<SortBy>); 8] = [
+const COLUMNS: [(Col, Option<SortBy>); 10] = [
     (Col::flex("col-name"), Some(SortBy::Name)),
     (Col::fixed("col-size", 82.0, 1), Some(SortBy::Size)),
     (
@@ -51,6 +53,8 @@ const COLUMNS: [(Col, Option<SortBy>); 8] = [
     (Col::fixed("col-folders", 62.0, 6), Some(SortBy::Folders)),
     (Col::fixed("col-modified", 88.0, 3), Some(SortBy::Modified)),
     (Col::fixed("col-type", 76.0, 7), Some(SortBy::Type)),
+    (Col::fixed("col-accessed", 88.0, 8), Some(SortBy::Accessed)),
+    (Col::fixed("col-created", 88.0, 9), Some(SortBy::Created)),
 ];
 
 pub fn sorted_children(tree: &Tree, focus: NodeId, sort: Sort) -> Vec<NodeId> {
@@ -67,6 +71,8 @@ pub fn sorted_children(tree: &Tree, focus: NodeId, sort: Sort) -> Vec<NodeId> {
             SortBy::Files => x.files.cmp(&y.files),
             SortBy::Folders => x.dirs.cmp(&y.dirs),
             SortBy::Modified => x.modified.cmp(&y.modified),
+            SortBy::Accessed => x.accessed.cmp(&y.accessed),
+            SortBy::Created => x.created.cmp(&y.created),
             SortBy::Type => (x.kind != Kind::Dir, extension_of(tree.name_bytes(*a)))
                 .cmp(&(y.kind != Kind::Dir, extension_of(tree.name_bytes(*b)))),
         }
@@ -126,6 +132,8 @@ impl TableSource for Source<'_> {
             4 => table::text(ui, env, &fmt::count(node.files), true),
             5 => table::text(ui, env, &fmt::count(node.dirs), true),
             6 => table::text(ui, env, &fmt::date(node.modified), true),
+            8 => table::text(ui, env, &fmt::date(node.accessed), true),
+            9 => table::text(ui, env, &fmt::date(node.created), true),
             _ => {
                 let ext = extension_of(self.tree.name_bytes(id));
                 let kind = if node.kind == Kind::File && !ext.is_empty() {
@@ -207,6 +215,8 @@ mod tests {
             kind: Kind::Dir,
             flags: Flags::empty(),
             modified: 0,
+            accessed: 0,
+            created: 0,
             size: 0,
             allocated: 0,
         };

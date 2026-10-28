@@ -172,6 +172,8 @@ mod tests {
             kind,
             flags: Flags::empty(),
             modified,
+            accessed: 0,
+            created: 0,
             size,
             allocated: size,
         }

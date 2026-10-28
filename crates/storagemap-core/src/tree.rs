@@ -83,6 +83,11 @@ pub struct Node {
     /// Last modification, seconds since the Unix epoch. For directories this
     /// is the newest modification anywhere below.
     pub modified: i64,
+    /// Last access, Unix seconds (0 if unknown). For directories, the newest
+    /// access anywhere below. Many systems update it lazily or not at all.
+    pub accessed: i64,
+    /// Creation, Unix seconds (0 if unknown); the entry's own, not aggregated.
+    pub created: i64,
     /// Logical size; aggregated for directories.
     pub size: u64,
     /// Allocated bytes; aggregated for directories (includes the directory's
@@ -277,6 +282,8 @@ pub struct EntryInfo {
     pub kind: Kind,
     pub flags: Flags,
     pub modified: i64,
+    pub accessed: i64,
+    pub created: i64,
     pub size: u64,
     pub allocated: u64,
 }
@@ -330,6 +337,8 @@ impl TreeBuilder {
             kind: info.kind,
             flags: info.flags,
             modified: info.modified,
+            accessed: info.accessed,
+            created: info.created,
             size: info.size,
             allocated: info.allocated,
             files: u64::from(info.kind != Kind::Dir),
@@ -353,6 +362,7 @@ impl TreeBuilder {
             let child = nodes[i].clone();
             let p = &mut nodes[child.parent as usize];
             p.modified = p.modified.max(child.modified);
+            p.accessed = p.accessed.max(child.accessed);
             p.dirs += child.dirs + u64::from(child.is_dir());
             if !child.flags.contains(Flags::HARDLINK_DUP) {
                 p.size += child.size;
@@ -405,6 +415,8 @@ mod tests {
             kind: Kind::File,
             flags: Flags::empty(),
             modified: 10,
+            accessed: 0,
+            created: 0,
             size,
             allocated: size,
         }
@@ -415,6 +427,8 @@ mod tests {
             kind: Kind::Dir,
             flags: Flags::empty(),
             modified: 0,
+            accessed: 0,
+            created: 0,
             size: 0,
             allocated: 0,
         }

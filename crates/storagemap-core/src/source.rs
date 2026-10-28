@@ -126,6 +126,8 @@ mod tests {
                         },
                         flags: Flags::empty(),
                         modified: 0,
+                        accessed: 0,
+                        created: 0,
                         size: size.unwrap_or(0),
                         allocated: size.unwrap_or(0),
                     },
