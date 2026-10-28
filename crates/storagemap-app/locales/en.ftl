@@ -334,6 +334,16 @@ tab-changes = Changes
 compare-title = Compare with an earlier scan
 compare-none = No earlier scans of this folder yet. Every scan is saved as a snapshot, so next time you will see exactly what grew and what disappeared.
 compare-browse = Open snapshot file…
+action-open-snapshot = Open saved scan…
+snapshot-open = Open
+snapshot-open-hint = Browse this saved scan in its own tab, as the folder was then
+saved-scan-from = Saved scan from { $date }
+saved-read-only = A saved scan shows the folder as it was; scan the folder again to act on its files.
+saved-small-files =
+    { $count ->
+        [one] 1 smaller file
+       *[other] { $n } smaller files
+    }
 compare-summary = { $change } since { $date }
 compare-other = Compare with…
 compare-clear = Stop comparing

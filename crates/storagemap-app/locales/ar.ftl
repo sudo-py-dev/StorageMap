@@ -351,6 +351,20 @@ tab-changes = التغييرات
 compare-title = المقارنة بفحص سابق
 compare-none = لا توجد فحوصات سابقة لهذا المجلد بعد. يُحفظ كل فحص كلقطة، لذا سترى في المرة القادمة بالضبط ما الذي كبر وما الذي اختفى.
 compare-browse = فتح ملف لقطة…
+action-open-snapshot = فتح فحص محفوظ…
+snapshot-open = فتح
+snapshot-open-hint = تصفّح هذا الفحص المحفوظ في علامة تبويب خاصة به، كما كان المجلد حينها
+saved-scan-from = فحص محفوظ من { $date }
+saved-read-only = يعرض الفحص المحفوظ المجلد كما كان؛ افحص المجلد مرة أخرى للعمل على ملفاته.
+saved-small-files =
+    { $count ->
+        [zero] لا ملفات صغيرة
+        [one] ملف صغير واحد
+        [two] ملفان صغيران
+        [few] { $n } ملفات صغيرة
+        [many] { $n } ملفًا صغيرًا
+       *[other] { $n } ملف صغير
+    }
 compare-summary = { $change } منذ { $date }
 compare-other = المقارنة مع…
 compare-clear = إيقاف المقارنة

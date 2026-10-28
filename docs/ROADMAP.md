@@ -76,10 +76,13 @@ shared foundations the later items build on.
 
 ## Phase 5 — Growth over time
 
-- Load a saved scan and browse it without rescanning.
-- Compare any two saved scans, not only the latest.
+- Load a saved scan and browse it without rescanning. *(Done: File → Open
+  saved scan, Open in the Changes tab, or `storagemap file.smap`; read-only.)*
+- Compare any two saved scans, not only the latest. *(Done: open one, then
+  compare it with any earlier one in its Changes tab.)*
 - Windows: read Volume Shadow Copies to compare with an earlier state of the
-  disk without having saved a scan.
+  disk without having saved a scan. *(Not yet: needs the Windows VSS API and
+  administrator rights, and testing on Windows.)*
 
 ## Phase 6 — Windows and NTFS depth
 

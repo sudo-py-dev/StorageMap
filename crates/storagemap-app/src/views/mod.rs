@@ -206,6 +206,9 @@ pub struct ScanView {
     /// The tree is a partial one from a scan still running; it is replaced
     /// as the scan progresses.
     pub scanning: bool,
+    /// When this tab shows a saved scan instead of the disk now: when it was
+    /// taken (Unix seconds). Such a tab is read-only.
+    pub saved_at: Option<i64>,
     /// Folder shown by the central views.
     pub focus: NodeId,
     pub selected: Option<NodeId>,
@@ -268,6 +271,7 @@ impl ScanView {
             errors: result.errors,
             cancelled: result.cancelled,
             scanning: false,
+            saved_at: None,
             focus: root,
             selected: Some(root),
             marked: HashSet::new(),

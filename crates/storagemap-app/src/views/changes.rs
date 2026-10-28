@@ -235,10 +235,20 @@ fn snapshot_menu(ui: &mut Ui, env: &mut Env<'_>, scan: &ScanView) {
                 ("size", env.size(info.total.size).into()),
             ],
         );
-        if ui.button(label).clicked() {
-            env.push(Action::CompareWith(info.file.clone()));
-            ui.close();
-        }
+        crate::widgets::row(ui, env.i18n.dir(), |ui| {
+            if ui.button(label).clicked() {
+                env.push(Action::CompareWith(info.file.clone()));
+                ui.close();
+            }
+            if ui
+                .small_button(format!("{}  {}", crate::icons::AGE, env.t("snapshot-open")))
+                .on_hover_text(env.t("snapshot-open-hint"))
+                .clicked()
+            {
+                env.push(Action::OpenSnapshot(info.file.clone()));
+                ui.close();
+            }
+        });
     }
     if scan.comparison.is_some() {
         ui.separator();

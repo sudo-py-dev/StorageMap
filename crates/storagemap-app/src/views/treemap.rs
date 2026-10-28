@@ -371,7 +371,7 @@ fn paint_tiles(
                 painter,
                 env.i18n,
                 line,
-                &tree.name(t.id),
+                &display_name(env, tree, t.id),
                 small.clone(),
                 ink,
                 false,
@@ -466,4 +466,14 @@ fn legend(ui: &mut Ui, env: &Env<'_>, tiles: &[Tile]) {
             }
         },
     );
+}
+
+/// A tile's name; a saved scan's "smaller files" entry reads as such.
+fn display_name(env: &Env<'_>, tree: &Tree, id: NodeId) -> String {
+    let node = tree.node(id);
+    if node.flags.contains(storagemap_core::Flags::SUMMARY) {
+        env.i18n.count("saved-small-files", node.files)
+    } else {
+        tree.name(id).into_owned()
+    }
 }

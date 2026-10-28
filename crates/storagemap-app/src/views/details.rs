@@ -147,7 +147,11 @@ impl TableSource for Source<'_> {
                 } else {
                     crate::icons::FILE
                 };
-                let name = format!("{icon} {}", self.tree.name(id));
+                let name = if node.flags.contains(Flags::SUMMARY) {
+                    format!("{icon} {}", env.i18n.count("saved-small-files", node.files))
+                } else {
+                    format!("{icon} {}", self.tree.name(id))
+                };
                 if env.is_large(self.tree, id) {
                     let color = crate::theme::large_text(ui.visuals());
                     table::colored(ui, env, &name, false, color);

@@ -91,6 +91,9 @@ pub enum Action {
     SaveSnapshot,
     CompareWith(PathBuf),
     BrowseSnapshot,
+    /// Opens a saved scan in its own tab, to browse as it was.
+    OpenSnapshot(PathBuf),
+    BrowseOpenSnapshot,
     ClearComparison,
     SetDuplicateMinSize(u64),
     SetDuplicateSha256(bool),
@@ -245,7 +248,15 @@ impl App {
             tracing::debug!(%err, "cannot start cleanup");
         }
         if let Some(path) = initial {
-            app.actions.push(Action::StartScan(path));
+            // A saved scan opens as itself; anything else is scanned.
+            let saved = path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("smap"));
+            app.actions.push(if saved {
+                Action::OpenSnapshot(path)
+            } else {
+                Action::StartScan(path)
+            });
         }
         app
     }
@@ -374,8 +385,9 @@ impl App {
     /// Shows `view` as a tab: replacing the tab of the same folder, or
     /// added after the others.
     fn open_tab(&mut self, view: ScanView) {
-        self.tabs()
-            .open(view, |a, b| a.tree.root_path() == b.tree.root_path());
+        self.tabs().open(view, |a, b| {
+            a.tree.root_path() == b.tree.root_path() && a.saved_at == b.saved_at
+        });
     }
 
     /// Removes and returns the tab showing the running scan, if any.
@@ -456,6 +468,15 @@ impl App {
                     self.notify(self.i18n.t("copied"), false);
                 }
             }
+            Action::AskTrash(_)
+            | Action::AskEmptyTrash(_)
+            | Action::Bulk(_)
+            | Action::RunBulkTrash
+            | Action::RunBulkRename(_)
+                if self.scan.as_ref().is_some_and(|s| s.saved_at.is_some()) =>
+            {
+                self.notify(self.i18n.t("saved-read-only"), true);
+            }
             Action::AskTrash(id) => {
                 let Some(path) = self.path_of(id) else { return };
                 if self.scan.as_ref().is_some_and(|s| s.scanning) {
@@ -529,6 +550,18 @@ impl App {
             Action::About(show) => self.show_about = show,
             Action::SaveSnapshot => self.save_snapshot_now(),
             Action::CompareWith(file) => self.compare_with(&file),
+            Action::OpenSnapshot(file) => self.open_snapshot(&file),
+            Action::BrowseOpenSnapshot => {
+                let mut dialog = rfd::FileDialog::new()
+                    .set_title(self.i18n.logical("action-open-snapshot"))
+                    .add_filter("StorageMap snapshot", &["smap"]);
+                if let Some(dir) = platform::snapshot_dir() {
+                    dialog = dialog.set_directory(dir);
+                }
+                if let Some(file) = dialog.pick_file() {
+                    self.open_snapshot(&file);
+                }
+            }
             Action::BrowseSnapshot => {
                 let mut dialog = rfd::FileDialog::new()
                     .set_title(self.i18n.logical("compare-browse"))
@@ -609,7 +642,10 @@ impl App {
         // Rescanning an open folder updates its tab in place, keeping the
         // user's place, instead of opening a fresh one.
         let root = std::path::absolute(&path).unwrap_or_else(|_| path.clone());
-        if let Some(view) = self.tabs_mut().find(|v| v.tree.root_path() == root) {
+        if let Some(view) = self
+            .tabs_mut()
+            .find(|v| v.tree.root_path() == root && v.saved_at.is_none())
+        {
             view.scanning = true;
         }
         let opts = ScanOptions {
@@ -997,6 +1033,10 @@ impl App {
             return;
         };
         view.snapshots = snapshot::list(&dir, Some(view.tree.root_path()));
+        // A saved scan compares with the ones taken before it.
+        if let Some(taken) = view.saved_at {
+            view.snapshots.retain(|s| s.taken_at < taken);
+        }
         if let Some(latest) = view.snapshots.first() {
             match Snapshot::load(&latest.file).and_then(|s| Comparison::new(&view.tree, &s)) {
                 Ok(cmp) => view.comparison = Some(cmp),
@@ -1024,6 +1064,31 @@ impl App {
                 self.notify(text, true);
             }
         }
+    }
+
+    /// Shows a saved scan in its own read-only tab, compared with the
+    /// snapshot before it when there is one.
+    fn open_snapshot(&mut self, file: &std::path::Path) {
+        let snap = match Snapshot::load(file) {
+            Ok(snap) => snap,
+            Err(e) => {
+                let text = self
+                    .i18n
+                    .ta("compare-failed", &[("error", e.to_string().into())]);
+                self.notify(text, true);
+                return;
+            }
+        };
+        let mut view = ScanView::new(storagemap_core::ScanResult {
+            tree: snap.to_tree(),
+            backend: storagemap_core::Backend::Portable,
+            elapsed: std::time::Duration::ZERO,
+            errors: 0,
+            cancelled: false,
+        });
+        view.saved_at = Some(snap.taken_at);
+        self.attach_history(&mut view);
+        self.open_tab(view);
     }
 
     fn compare_with(&mut self, file: &std::path::Path) {

@@ -336,6 +336,16 @@ tab-changes = שינויים
 compare-title = השוואה לסריקה קודמת
 compare-none = עדיין אין סריקות קודמות של התיקייה הזו. כל סריקה נשמרת כתמונת מצב, כך שבפעם הבאה תראו בדיוק מה גדל ומה נעלם.
 compare-browse = פתיחת קובץ תמונת מצב…
+action-open-snapshot = פתיחת סריקה שמורה…
+snapshot-open = פתיחה
+snapshot-open-hint = עיון בסריקה השמורה הזו בכרטיסייה משלה, כפי שהתיקייה הייתה אז
+saved-scan-from = סריקה שמורה מ־{ $date }
+saved-read-only = סריקה שמורה מציגה את התיקייה כפי שהייתה; יש לסרוק את התיקייה שוב כדי לפעול על הקבצים שלה.
+saved-small-files =
+    { $count ->
+        [one] קובץ קטן אחד
+       *[other] { $n } קבצים קטנים
+    }
 compare-summary = { $change } מאז { $date }
 compare-other = השוואה אל…
 compare-clear = הפסקת ההשוואה

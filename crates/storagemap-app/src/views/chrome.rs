@@ -157,6 +157,16 @@ fn file_menu(app: &mut App, ui: &mut Ui) {
             );
             item(
                 ui,
+                true,
+                egui::Button::new(format!(
+                    "{}  {}",
+                    crate::icons::AGE,
+                    i.t("action-open-snapshot")
+                )),
+                Action::BrowseOpenSnapshot,
+            );
+            item(
+                ui,
                 has_scan,
                 shortcut_button(
                     ui,
@@ -523,10 +533,13 @@ fn scan_tab(
     index: usize,
 ) -> Option<Action> {
     let root = view.tree.root_path();
-    let name = root
+    let mut name = root
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| root.to_string_lossy().into_owned());
+    if let Some(taken) = view.saved_at {
+        name = format!("{} {name} · {}", crate::icons::AGE, fmt::date(taken));
+    }
     let visuals = ui.visuals();
     let fill = if active {
         visuals.widgets.active.weak_bg_fill
@@ -593,6 +606,20 @@ pub fn status_bar(app: &mut App, ui: &mut Ui) {
                 ui.ctx()
                     .request_repaint_after(crate::scan_job::PROGRESS_REFRESH);
                 ui.separator();
+            }
+            if let Some(taken) = scan.saved_at {
+                ui.label(
+                    RichText::new(format!(
+                        "{}  {}",
+                        crate::icons::AGE,
+                        i.ta("saved-scan-from", &[("date", fmt::date_time(taken).into())])
+                    ))
+                    .small()
+                    .strong(),
+                );
+                ui.separator();
+                ui.label(RichText::new(i.t("saved-read-only")).small().weak());
+                return;
             }
             if scan.scanning
                 && let Some(job) = &app.job

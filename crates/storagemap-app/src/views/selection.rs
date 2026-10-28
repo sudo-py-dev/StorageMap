@@ -30,7 +30,7 @@ pub fn bar(ui: &mut Ui, env: &mut Env<'_>, scan: &ScanView, busy: bool) {
                 ],
             )));
             ui.separator();
-            let enabled = !busy && !scan.scanning;
+            let enabled = !busy && !scan.scanning && scan.saved_at.is_none();
             for (request, icon, id) in [
                 (BulkRequest::MoveTo, crate::icons::MOVE, "bulk-move"),
                 (BulkRequest::CopyTo, crate::icons::COPY, "bulk-copy"),

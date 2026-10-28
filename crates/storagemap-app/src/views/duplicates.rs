@@ -401,6 +401,8 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     poll(&mut scan.duplicates);
     poll_run(scan, env);
     let dir = env.i18n.dir();
+    // A saved scan's files may be gone or changed: compare only real files.
+    let live = scan.saved_at.is_none();
     let mut restart = false;
     row(ui, dir, |ui| match &scan.duplicates {
         State::Running { job, .. } => {
@@ -423,8 +425,10 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
             ui.ctx().request_repaint_after(PROGRESS_REFRESH);
         }
         _ => {
+            let find = egui::Button::new(format!("{} {}", crate::icons::SEARCH, env.t("dup-find")));
             restart = ui
-                .button(format!("{} {}", crate::icons::SEARCH, env.t("dup-find")))
+                .add_enabled(live, find)
+                .on_disabled_hover_text(env.t("saved-read-only"))
                 .clicked();
             ui.label(env.t("dup-min-size"));
             let current = env.settings.duplicate_min_size;
