@@ -10,7 +10,7 @@ use std::fs;
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
-use crate::tree::{Flags, Kind, NodeId, Tree};
+use crate::tree::{EntryInfo, Flags, Kind, NodeId, Tree, TreeBuilder};
 
 const MAGIC: &[u8; 8] = b"SMAPSNP1";
 const VERSION: u32 = 1;
@@ -123,6 +123,77 @@ impl Snapshot {
 
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    /// The saved scan as a tree to browse. Each folder's files below the
+    /// size threshold become one entry flagged [`Flags::SUMMARY`] (named
+    /// `…`), so every folder's totals stay exact.
+    pub fn to_tree(&self) -> Tree {
+        let info = |kind, size, allocated| EntryInfo {
+            kind,
+            flags: Flags::empty(),
+            modified: 0,
+            accessed: 0,
+            created: 0,
+            owner: crate::NO_OWNER,
+            size,
+            allocated,
+        };
+        // What each folder's recorded children add up to.
+        let mut recorded = vec![Stats::default(); self.entries.len()];
+        for e in self.entries.iter().skip(1) {
+            if let Some(r) = recorded.get_mut(e.parent as usize) {
+                r.size += e.stats.size;
+                r.allocated += e.stats.allocated;
+                r.files += e.stats.files;
+            }
+        }
+        let rest = |i: usize| {
+            let e = &self.entries[i];
+            Stats {
+                size: e.stats.size.saturating_sub(recorded[i].size),
+                allocated: e.stats.allocated.saturating_sub(recorded[i].allocated),
+                files: e.stats.files.saturating_sub(recorded[i].files),
+            }
+        };
+        // A folder without small files keeps its leftover space (its own
+        // metadata) itself; otherwise the summary entry carries it.
+        let own = |i: usize| {
+            let r = rest(i);
+            if r.files == 0 { r.allocated } else { 0 }
+        };
+        let mut builder = TreeBuilder::new(self.root.clone(), info(Kind::Dir, 0, own(0)))
+            .with_capacity(self.entries.len() * 2, 0);
+        let mut ids: Vec<NodeId> = Vec::with_capacity(self.entries.len());
+        for (i, e) in self.entries.iter().enumerate() {
+            let id = if i == 0 {
+                NodeId::ROOT
+            } else {
+                let parent = ids.get(e.parent as usize).copied().unwrap_or(NodeId::ROOT);
+                let (size, allocated) = if e.is_dir {
+                    (0, own(i))
+                } else {
+                    (e.stats.size, e.stats.allocated)
+                };
+                let kind = if e.is_dir { Kind::Dir } else { Kind::File };
+                builder.push(parent, &e.name, info(kind, size, allocated))
+            };
+            ids.push(id);
+        }
+        for (i, e) in self.entries.iter().enumerate() {
+            if !e.is_dir {
+                continue;
+            }
+            let rest = rest(i);
+            if rest.files == 0 {
+                continue;
+            }
+            let mut summary = info(Kind::Other, rest.size, rest.allocated);
+            summary.flags.insert(Flags::SUMMARY);
+            let id = builder.push(ids[i], "…".as_bytes(), summary);
+            builder.node_info_mut(id).files = rest.files;
+        }
+        builder.finish()
     }
 
     pub fn total(&self) -> Stats {
@@ -533,6 +604,53 @@ mod tests {
             Snapshot::read_from(bad.as_slice()),
             Err(SnapshotError::Corrupt(_))
         ));
+    }
+
+    #[test]
+    fn saved_scan_reopens_with_exact_totals() {
+        let dir = EntryInfo {
+            kind: Kind::Dir,
+            flags: Flags::empty(),
+            modified: 0,
+            accessed: 0,
+            created: 0,
+            owner: crate::NO_OWNER,
+            size: 0,
+            allocated: 4,
+        };
+        let file = |size| EntryInfo {
+            kind: Kind::File,
+            size,
+            allocated: size,
+            ..dir
+        };
+        let mut b = TreeBuilder::new(PathBuf::from("/r"), dir);
+        let photos = b.push(NodeId::ROOT, b"photos", dir);
+        b.push(photos, b"big.jpg", file(5_000));
+        b.push(photos, b"a.txt", file(10));
+        b.push(photos, b"b.txt", file(20));
+        b.push(NodeId::ROOT, b"empty", dir);
+        let tree = b.finish();
+        let reopened = Snapshot::capture(&tree, 0, 1_000).to_tree();
+
+        let (old, new) = (tree.node(tree.root()), reopened.node(reopened.root()));
+        assert_eq!(
+            (new.size, new.allocated, new.files),
+            (old.size, old.allocated, old.files)
+        );
+        let photos = reopened.find(Path::new("/r/photos")).expect("photos");
+        let names: Vec<_> = reopened
+            .children(photos)
+            .map(|c| reopened.name(c).into_owned())
+            .collect();
+        assert_eq!(names, ["big.jpg", "…"]);
+        let summary = reopened.find(Path::new("/r/photos/…")).expect("summary");
+        let node = reopened.node(summary);
+        assert!(node.flags.contains(Flags::SUMMARY));
+        assert_eq!((node.size, node.files), (30, 2));
+        // A folder without small files gets no summary entry.
+        let empty = reopened.find(Path::new("/r/empty")).expect("empty");
+        assert!(!reopened.has_children(empty));
     }
 
     #[test]

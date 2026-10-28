@@ -58,6 +58,9 @@ impl Flags {
     pub const ENCRYPTED: Flags = Flags(1 << 9);
     /// Sparse: unwritten ranges take no space.
     pub const SPARSE: Flags = Flags(1 << 10);
+    /// Not a real entry: the files of a folder too small to have been
+    /// recorded one by one in a saved scan, as one total.
+    pub const SUMMARY: Flags = Flags(1 << 11);
 
     pub const fn empty() -> Self {
         Flags(0)
