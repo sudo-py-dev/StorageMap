@@ -24,6 +24,7 @@ export-format-excel = Excel
 export-format-html = صفحة ويب
 export-format-json = JSON
 export-format-text = نص
+export-more = خيارات إضافية
 export-depth = مستويات المجلدات
 export-depth-levels =
     { $count ->
