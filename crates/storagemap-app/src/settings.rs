@@ -137,10 +137,7 @@ impl Default for Settings {
 /// header's right-click menu.
 fn default_hidden_columns() -> BTreeMap<String, Vec<String>> {
     let details = ["col-accessed", "col-created", "col-attributes", "col-owner"];
-    BTreeMap::from([(
-        "details".to_owned(),
-        details.map(str::to_owned).to_vec(),
-    )])
+    BTreeMap::from([("details".to_owned(), details.map(str::to_owned).to_vec())])
 }
 
 impl Settings {
