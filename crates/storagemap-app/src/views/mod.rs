@@ -118,16 +118,23 @@ pub enum Tab {
 }
 
 impl Tab {
+    /// Tabs grouped by purpose: see the space, free it, explore it.
+    pub const GROUPS: [&[Tab]; 3] = [
+        &[Tab::Treemap, Tab::Chart, Tab::Details],
+        &[Tab::Cleanup, Tab::TopFiles, Tab::Duplicates],
+        &[Tab::Types, Tab::Ages, Tab::Changes, Tab::Search],
+    ];
+
     pub const ALL: [Tab; 10] = [
         Tab::Treemap,
         Tab::Chart,
         Tab::Details,
         Tab::Cleanup,
         Tab::TopFiles,
+        Tab::Duplicates,
         Tab::Types,
         Tab::Ages,
         Tab::Changes,
-        Tab::Duplicates,
         Tab::Search,
     ];
 

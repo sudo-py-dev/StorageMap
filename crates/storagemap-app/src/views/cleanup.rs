@@ -221,7 +221,11 @@ fn item(ui: &mut Ui, env: &mut Env<'_>, tree: &Tree, id: NodeId, size: u64) {
                 actions.push(action);
             }
             if ui
-                .small_button(crate::icons::REVEAL)
+                .small_button(format!(
+                    "{} {}",
+                    crate::icons::REVEAL,
+                    env.t("action-open-folder")
+                ))
                 .on_hover_text(env.t("action-show-in-folder"))
                 .clicked()
             {

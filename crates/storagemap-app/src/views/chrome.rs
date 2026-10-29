@@ -35,9 +35,10 @@ const TAB_FADE: f32 = 0.18;
 const LOGO_SIZE: f32 = 22.0;
 const ICON_SIZE: f32 = 17.0;
 const SEARCH_WIDTH: f32 = 220.0;
-/// Below this width tabs show icons only (with tooltips).
 const TAB_TEXT_PADDING: f32 = 22.0;
 const TAB_GAP: f32 = 4.0;
+/// Space around the divider between tab groups.
+const TAB_GROUP_GAP: f32 = 12.0;
 
 const METRICS: [(Metric, &str); 3] = [
     (Metric::Size, "metric-size"),
@@ -640,15 +641,6 @@ pub fn status_bar(app: &mut App, ui: &mut Ui) {
                 ui.label(RichText::new(i.t("scan-live-hint")).small().weak());
                 return;
             }
-            ui.label(
-                RichText::new(format!(
-                    "{} {}",
-                    crate::icons::LIGHTNING,
-                    backend_label(i, scan.backend)
-                ))
-                .small(),
-            );
-            ui.separator();
             let done = i.ta(
                 "scan-done",
                 &[
@@ -656,7 +648,9 @@ pub fn status_bar(app: &mut App, ui: &mut Ui) {
                     ("seconds", seconds(scan.elapsed).into()),
                 ],
             );
-            ui.label(RichText::new(done).small());
+            // How it was scanned matters only to the curious.
+            ui.label(RichText::new(done).small())
+                .on_hover_text(backend_label(i, scan.backend));
             if scan.errors > 0 {
                 ui.separator();
                 ui.colored_label(
@@ -786,13 +780,18 @@ fn central_view(
     selection::bar(ui, env, scan, busy);
     ui.add_space(4.0);
     let before = scan.tab;
-    // Wraps onto a second line in narrow windows instead of widening the panel.
-    let compact = !tabs_fit(ui, env);
+    // Wraps onto a second line in narrow windows instead of widening the
+    // panel, so every tab keeps its name.
     let tabs = env.i18n.dir().row().with_main_wrap(true);
     ui.allocate_ui_with_layout(vec2(ui.available_width(), 0.0), tabs, |ui| {
         ui.spacing_mut().item_spacing = vec2(TAB_GAP, TAB_GAP);
-        for tab in Tab::ALL {
-            tab_pill(ui, env, &mut scan.tab, tab, compact);
+        for (index, group) in Tab::GROUPS.iter().enumerate() {
+            if index > 0 {
+                ui.add(egui::Separator::default().vertical().spacing(TAB_GROUP_GAP));
+            }
+            for &tab in *group {
+                tab_pill(ui, env, &mut scan.tab, tab);
+            }
         }
     });
     if scan.tab != before {
@@ -852,40 +851,15 @@ fn cleanup_chip(ui: &mut Ui, env: &Env<'_>, scan: &mut ScanView) {
     });
 }
 
-/// Whether every tab fits on one line with its label.
-fn tabs_fit(ui: &Ui, env: &Env<'_>) -> bool {
-    let font = egui::TextStyle::Button.resolve(ui.style());
-    let total: f32 = Tab::ALL
-        .iter()
-        .map(|t| {
-            let text = format!("{}  {}", t.icon(), env.t(t.label_id()));
-            ui.painter()
-                .layout_no_wrap(text, font.clone(), Color32::PLACEHOLDER)
-                .size()
-                .x
-                + TAB_TEXT_PADDING
-                + TAB_GAP
-        })
-        .sum();
-    total <= ui.available_width()
-}
-
 /// A rounded tab with animated hover and selection.
-fn tab_pill(ui: &mut Ui, env: &Env<'_>, current: &mut Tab, tab: Tab, compact: bool) {
+fn tab_pill(ui: &mut Ui, env: &Env<'_>, current: &mut Tab, tab: Tab) {
     let label = env.t(tab.label_id());
     let font = egui::TextStyle::Button.resolve(ui.style());
-    // When space is tight only the selected tab keeps its name; the others
-    // show their icon, with the name in a tooltip.
-    let compact = compact && *current != tab;
-    let text = if compact {
-        tab.icon().to_owned()
-    } else {
-        format!("{}  {label}", tab.icon())
-    };
+    let text = format!("{}  {label}", tab.icon());
     let galley = ui
         .painter()
         .layout_no_wrap(text, font, Color32::PLACEHOLDER);
-    let size = galley.size() + vec2(if compact { 18.0 } else { TAB_TEXT_PADDING }, 10.0);
+    let size = galley.size() + vec2(TAB_TEXT_PADDING, 10.0);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let selected = *current == tab;
     let t = ui
@@ -911,11 +885,6 @@ fn tab_pill(ui: &mut Ui, env: &Env<'_>, current: &mut Tab, tab: Tab, compact: bo
         ink,
     );
     response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Tab, true, selected, &label));
-    let response = if compact {
-        response.on_hover_text(&label)
-    } else {
-        response
-    };
     if response.clicked() {
         *current = tab;
     }

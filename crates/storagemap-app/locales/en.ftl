@@ -48,6 +48,7 @@ action-quit = Quit
 action-up = Up
 action-open = Open
 action-show-in-folder = Show in file manager
+action-open-folder = Open folder
 action-copy-path = Copy path
 action-trash = Move to trash…
 action-scan-this = Scan this folder

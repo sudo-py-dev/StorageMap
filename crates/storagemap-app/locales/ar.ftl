@@ -50,6 +50,7 @@ action-quit = خروج
 action-up = لأعلى
 action-open = فتح
 action-show-in-folder = إظهار في مدير الملفات
+action-open-folder = فتح المجلد
 action-copy-path = نسخ المسار
 action-trash = نقل إلى سلة المحذوفات…
 action-scan-this = فحص هذا المجلد

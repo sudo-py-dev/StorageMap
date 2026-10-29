@@ -48,6 +48,7 @@ action-quit = יציאה
 action-up = למעלה
 action-open = פתיחה
 action-show-in-folder = הצגה במנהל הקבצים
+action-open-folder = פתיחת התיקייה
 action-copy-path = העתקת נתיב
 action-trash = העברה לאשפה…
 action-scan-this = סריקת תיקייה זו
