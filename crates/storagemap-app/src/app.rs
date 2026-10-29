@@ -286,7 +286,7 @@ impl App {
                     Ok(result) => {
                         self.settings.remember(root.clone());
                         ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
-                            "{} — StorageMap",
+                            "{} - StorageMap",
                             root.display()
                         )));
                         let mut view = match self.take_live_tab() {

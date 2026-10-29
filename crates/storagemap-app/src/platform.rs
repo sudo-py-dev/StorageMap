@@ -131,7 +131,7 @@ pub fn reveal(path: &Path) -> io::Result<()> {
 }
 
 /// Adds (or removes) an "Open with StorageMap" entry for folders in the
-/// file manager, for the current user only — no admin rights needed.
+/// file manager, for the current user only; no admin rights needed.
 pub fn set_file_manager_integration(install: bool, label: &str) -> io::Result<()> {
     let exe = std::env::current_exe()?;
     imp::set_integration(install, label, &exe)

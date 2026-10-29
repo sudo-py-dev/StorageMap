@@ -2,7 +2,7 @@
 //!
 //! egui is LTR-only, so mirroring is explicit: rows flow from the start
 //! edge, text is elided/wrapped in *logical* order and only then reordered
-//! for display — otherwise RTL text would lose its beginning, not its end.
+//! for display; otherwise RTL text would lose its beginning, not its end.
 
 use std::sync::Arc;
 
@@ -79,7 +79,7 @@ impl Direction {
     }
 }
 
-/// A single-height horizontal row flowing from the reading-start edge —
+/// A single-height horizontal row flowing from the reading-start edge:
 /// the direction-aware counterpart of `Ui::horizontal`.
 pub fn row<R>(ui: &mut Ui, dir: Direction, add: impl FnOnce(&mut Ui) -> R) -> R {
     let size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
@@ -152,7 +152,7 @@ pub fn paint_text(
 }
 
 /// A one-line label filling the remaining row width, elided (in logical
-/// order) instead of widening the layout — for paths and other long text.
+/// order) instead of widening the layout, for paths and other long text.
 pub fn elided_label(ui: &mut Ui, i18n: &I18n, logical: &str, color: Color32) -> Response {
     let height = ui.spacing().interact_size.y;
     let (rect, response) = ui.allocate_exact_size(

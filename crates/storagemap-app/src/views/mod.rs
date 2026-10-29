@@ -211,7 +211,7 @@ impl<K: PartialEq, V> Cached<K, V> {
     }
 }
 
-/// (focus, metric, generation) — what most analyses depend on.
+/// (focus, metric, generation): what most analyses depend on.
 pub(super) type AnalysisKey = (NodeId, Metric, u64);
 
 /// Everything about a loaded scan the UI keeps between frames.

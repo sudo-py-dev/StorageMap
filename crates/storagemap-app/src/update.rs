@@ -1,6 +1,6 @@
 //! Self-update from GitHub Releases.
 //!
-//! The check only asks GitHub for the latest release — no identifiers are
+//! The check only asks GitHub for the latest release; no identifiers are
 //! sent beyond a User-Agent. Downloads are verified against the release's
 //! `SHA256SUMS` before anything runs; an asset without a matching checksum is
 //! never installed.
@@ -408,7 +408,7 @@ pub enum Updater {
     Checking(Receiver<Result<Option<Release>, String>>),
     UpToDate,
     Available(Release),
-    /// Downloading, verifying, then installing — all off the UI thread, so
+    /// Downloading, verifying, then installing, all off the UI thread, so
     /// a password prompt from the package manager never freezes the app.
     Downloading {
         progress: Arc<DownloadProgress>,

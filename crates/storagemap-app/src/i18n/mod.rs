@@ -118,7 +118,7 @@ impl I18n {
         self.v(&self.la(id, args))
     }
 
-    /// Translated text with arguments, logical order — for composing into
+    /// Translated text with arguments, logical order, for composing into
     /// larger strings that are converted once at the end.
     pub fn la(&self, id: &str, args: &[(&str, FluentValue<'_>)]) -> String {
         let mut fa = FluentArgs::new();

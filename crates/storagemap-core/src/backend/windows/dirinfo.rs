@@ -1,7 +1,7 @@
 //! Directory walker using `GetFileInformationByHandleEx(FileIdBothDirectoryInfo)`.
 //!
 //! One call returns a 64 KiB batch of entries *with* logical size, allocation
-//! size, attributes and times, so no per-file `stat` is needed — far fewer
+//! size, attributes and times, so no per-file `stat` is needed; far fewer
 //! kernel transitions than `FindFirstFile`/`GetFileAttributesEx`.
 
 use std::ffi::OsString;

@@ -4,7 +4,7 @@ Where StorageMap is heading after 0.1. Work lands one phase at a time; each
 item ships on its own once it is usable. Items marked **groundwork** are the
 shared foundations the later items build on.
 
-## Phase 0 — Groundwork (done)
+## Phase 0: Groundwork (done)
 
 - **Scan filters** (groundwork). Exclude folders or files by name or path
   pattern, and optionally count only files that match include patterns.
@@ -22,7 +22,7 @@ shared foundations the later items build on.
   WebDAV, Azure Blob, SharePoint, disk images, phones), reusing the parallel
   walker, filters and tree: a new place implements `storagemap_core::source::Source`.
 
-## Phase 1 — Everyday analysis (done)
+## Phase 1: Everyday analysis (done)
 
 - Browse results while a scan is still running (live, partial tree).
   *(Done: finished top-level folders can be browsed; the NTFS table reader
@@ -39,7 +39,7 @@ shared foundations the later items build on.
 - Choose and reorder columns per table, and per export. *(Tables done:
   right-click a column header. Per-export columns come with Phase 4.)*
 
-## Phase 2 — Search (done)
+## Phase 2: Search (done)
 
 - Advanced search: name patterns, size range, dates, type, owner,
   attributes, combined freely, with saved searches. *(Done.)*
@@ -53,7 +53,7 @@ shared foundations the later items build on.
   confirmation, with a dry run first. *(Done: the confirmation lists every
   change, and each pair is compared byte by byte before it is replaced.)*
 
-## Phase 3 — Acting on files (done)
+## Phase 3: Acting on files (done)
 
 - Select many items and move them to the trash, move, copy or archive them
   (zip), with a summary and confirmation before anything happens. *(Done:
@@ -63,7 +63,7 @@ shared foundations the later items build on.
 - Bulk rename: replace characters or text in many names at once, with a
   preview. *(Done.)*
 
-## Phase 4 — Reports
+## Phase 4: Reports
 
 - Formats: Excel workbook, HTML report, PDF report, plain text, JSON,
   clipboard. *(Done except PDF: Excel, web page, JSON and text join CSV
@@ -74,7 +74,7 @@ shared foundations the later items build on.
 - Full file list export for use in a database. *(Done: files only, all
   levels, as CSV or JSON; also `--report FILE` on the command line.)*
 
-## Phase 5 — Growth over time
+## Phase 5: Growth over time
 
 - Load a saved scan and browse it without rescanning. *(Done: File → Open
   saved scan, Open in the Changes tab, or `storagemap file.smap`; read-only.)*
@@ -84,7 +84,7 @@ shared foundations the later items build on.
   disk without having saved a scan. *(Not yet: needs the Windows VSS API and
   administrator rights, and testing on Windows.)*
 
-## Phase 6 — Windows and NTFS depth
+## Phase 6: Windows and NTFS depth
 
 - Alternate data streams: count them and list them per file.
 - NTFS permissions: show and export who can access a folder.
@@ -92,7 +92,7 @@ shared foundations the later items build on.
 - The Explorer context menu for items inside StorageMap.
 - Drag items out of StorageMap into other applications.
 
-## Phase 7 — More places to scan
+## Phase 7: More places to scan
 
 Each is a scan source (see Phase 0).
 

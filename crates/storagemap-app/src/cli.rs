@@ -14,7 +14,7 @@ const DEFAULT_TOP: usize = 20;
 const DEFAULT_CSV_DEPTH: usize = 64;
 
 pub const USAGE: &str = "\
-StorageMap — see where your disk space goes
+StorageMap: see where your disk space goes
 
 USAGE:
     storagemap [PATH]                 open the app (and scan PATH)

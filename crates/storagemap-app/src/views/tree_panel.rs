@@ -150,7 +150,7 @@ pub fn rows(scan: &ScanView) -> &[Row] {
     scan.tree_rows.value()
 }
 
-/// Draws the panel; returns nothing — intents go to `env`.
+/// Draws the panel; returns nothing; intents go to `env`.
 pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
     let filter = scan.tree_filter;
     refresh(scan, env.settings.metric);

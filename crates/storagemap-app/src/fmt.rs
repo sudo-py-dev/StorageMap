@@ -130,7 +130,7 @@ pub fn date_time(unix_secs: i64) -> String {
 fn local(unix_secs: i64, pattern: &str) -> String {
     match chrono::DateTime::from_timestamp(unix_secs, 0) {
         Some(t) if unix_secs > 0 => t.with_timezone(&chrono::Local).format(pattern).to_string(),
-        _ => "—".into(),
+        _ => "-".into(),
     }
 }
 
@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn dates() {
-        assert_eq!(date(0), "—");
+        assert_eq!(date(0), "-");
         assert_eq!(date(1_700_000_000).len(), 10);
         assert_eq!(date_time(1_700_000_000).len(), 16);
     }
