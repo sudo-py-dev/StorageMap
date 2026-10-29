@@ -85,27 +85,27 @@ pub trait TableSource {
     }
 }
 
-/// Draws the table. `salt` identifies it in the user's column preferences.
+/// Draws the table. `table_id` identifies it in the user's column preferences.
 pub fn show(
     ui: &mut Ui,
     env: &mut Env<'_>,
-    salt: &'static str,
+    table_id: &'static str,
     cols: &[Col],
     source: &mut dyn TableSource,
 ) {
     let spacing = ui.spacing().item_spacing.x;
     let settings = env.settings;
     let mut order = visible_columns(cols, ui.available_width(), spacing, |c| {
-        settings.column_hidden(salt, c.title_id)
+        settings.column_hidden(table_id, c.title_id)
     });
-    let ranks = arranged(cols, settings.column_order.get(salt));
+    let ranks = arranged(cols, settings.column_order.get(table_id));
     order.sort_by_key(|&c| ranks.iter().position(|&r| r == c));
     if env.i18n.is_rtl() {
         order.reverse();
     }
     let mut builder = TableBuilder::new(ui)
         // Widths are remembered by position, so each arrangement keeps its own.
-        .id_salt((salt, &order))
+        .id_salt((table_id, &order))
         .striped(true)
         .resizable(true)
         .sense(Sense::click())
@@ -136,7 +136,7 @@ pub fn show(
                     if response.clicked() {
                         source.header_clicked(c);
                     }
-                    response.context_menu(|ui| column_menu(ui, env, salt, cols));
+                    response.context_menu(|ui| column_menu(ui, env, table_id, cols));
                 });
             }
         })
@@ -172,9 +172,9 @@ fn arranged(cols: &[Col], saved: Option<&Vec<String>>) -> Vec<usize> {
 
 /// Every column with a checkbox to show it (the flexible one always shows)
 /// and buttons to move it towards the start or end of the row.
-fn column_menu(ui: &mut Ui, env: &mut Env<'_>, salt: &'static str, cols: &[Col]) {
+fn column_menu(ui: &mut Ui, env: &mut Env<'_>, table_id: &'static str, cols: &[Col]) {
     ui.label(RichText::new(env.t("columns-menu")).weak());
-    let order = arranged(cols, env.settings.column_order.get(salt));
+    let order = arranged(cols, env.settings.column_order.get(table_id));
     let dir = env.i18n.dir();
     let (earlier, later) = if env.i18n.is_rtl() {
         (crate::icons::CARET_RIGHT, crate::icons::CARET_LEFT)
@@ -197,9 +197,9 @@ fn column_menu(ui: &mut Ui, env: &mut Env<'_>, salt: &'static str, cols: &[Col])
                 moved = Some(pos + 1);
             }
             if col.width.is_some() {
-                let mut shown = !env.settings.column_hidden(salt, col.title_id);
+                let mut shown = !env.settings.column_hidden(table_id, col.title_id);
                 if ui.checkbox(&mut shown, env.t(col.title_id)).changed() {
-                    env.push(Action::ToggleColumn(salt, col.title_id));
+                    env.push(Action::ToggleColumn(table_id, col.title_id));
                 }
             } else {
                 ui.add_enabled(false, egui::Checkbox::new(&mut true, env.t(col.title_id)));
@@ -208,7 +208,7 @@ fn column_menu(ui: &mut Ui, env: &mut Env<'_>, salt: &'static str, cols: &[Col])
                 let mut new = order.clone();
                 new.swap(pos, to);
                 env.push(Action::SetColumnOrder(
-                    salt,
+                    table_id,
                     new.into_iter().map(|i| cols[i].title_id).collect(),
                 ));
             }
@@ -216,7 +216,7 @@ fn column_menu(ui: &mut Ui, env: &mut Env<'_>, salt: &'static str, cols: &[Col])
     }
     ui.separator();
     if ui.button(env.t("columns-reset")).clicked() {
-        env.push(Action::ResetColumns(salt));
+        env.push(Action::ResetColumns(table_id));
         ui.close();
     }
 }
