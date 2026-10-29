@@ -1,7 +1,6 @@
 //! The settings window: grouped sections with a side navigation.
 
 use egui::{Align, Id, Layout, Modal, RichText, ScrollArea, Sides, Ui, vec2};
-use storagemap_core::Metric;
 
 use crate::app::{Action, App};
 use crate::fmt::{self, Unit};
@@ -15,13 +14,6 @@ use crate::widgets::{self, paragraph_small};
 const WINDOW_SIZE: egui::Vec2 = vec2(780.0, 520.0);
 const NAV_WIDTH: f32 = 180.0;
 const SCALES: [f32; 7] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.6];
-const DUP_SIZES: [u64; 5] = [
-    1024,
-    100 * 1024,
-    1024 * 1024,
-    10 * 1024 * 1024,
-    100 * 1024 * 1024,
-];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Section {
@@ -57,7 +49,7 @@ impl Section {
         match self {
             Section::General => (crate::icons::GENERAL, "settings-general"),
             Section::Appearance => (crate::icons::APPEARANCE, "settings-appearance"),
-            Section::Scanning => (crate::icons::SEARCH, "settings-scanning"),
+            Section::Scanning => (crate::icons::FOLDER_OPEN, "settings-scanning"),
             Section::Integration => (crate::icons::INTEGRATION, "settings-integration"),
             Section::Updates => (crate::icons::UPDATE, "settings-updates"),
             Section::Shortcuts => (crate::icons::KEYBOARD, "settings-shortcuts"),
@@ -84,7 +76,19 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
             ui.vertical(|ui| {
                 ui.with_layout(Layout::top_down(dir.start()), |ui| {
                     let (_, id) = app.settings_section.label();
-                    ui.heading(app.i18n.t(id));
+                    widgets::row(ui, dir, |ui| {
+                        ui.heading(app.i18n.t(id));
+                        ui.with_layout(dir.end_row(), |ui| {
+                            let close = super::chrome::icon_button(
+                                ui,
+                                crate::icons::CLOSE,
+                                &app.i18n.t("action-close"),
+                            );
+                            if close.clicked() {
+                                app.show_settings = false;
+                            }
+                        });
+                    });
                     ui.add_space(4.0);
                     ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                         ui.with_layout(Layout::top_down(dir.start()), |ui| section(ui, app, ctx));
@@ -193,15 +197,6 @@ fn general(ui: &mut Ui, i18n: &I18n, settings: &mut Settings, actions: &mut Vec<
                 }
             });
     });
-    row(ui, i18n, "metric-label", None, |ui| {
-        for (metric, id) in [
-            (Metric::Size, "metric-size"),
-            (Metric::Allocated, "metric-allocated"),
-            (Metric::FileCount, "metric-files"),
-        ] {
-            ui.selectable_value(&mut settings.metric, metric, i18n.t(id));
-        }
-    });
     row(ui, i18n, "view-units", None, |ui| {
         egui::ComboBox::from_id_salt("units")
             .selected_text(i18n.t(settings.unit.label_id()))
@@ -212,7 +207,9 @@ fn general(ui: &mut Ui, i18n: &I18n, settings: &mut Settings, actions: &mut Vec<
             });
     });
     row(ui, i18n, "view-decimals", None, |ui| {
-        ui.add(egui::Slider::new(&mut settings.decimals, 0..=3));
+        for decimals in 0..=3 {
+            ui.selectable_value(&mut settings.decimals, decimals, decimals.to_string());
+        }
     });
 }
 
@@ -305,16 +302,6 @@ fn scanning(
             toggle(ui, &mut settings.cross_filesystems, i18n.is_rtl());
         },
     );
-    row(ui, i18n, "dup-min-size", None, |ui| {
-        let label = |b: u64| i18n.v(&fmt::size(b, Unit::Auto, 0, |id| i18n.logical(id)));
-        egui::ComboBox::from_id_salt("dup-min-settings")
-            .selected_text(label(settings.duplicate_min_size))
-            .show_ui(ui, |ui| {
-                for s in DUP_SIZES {
-                    ui.selectable_value(&mut settings.duplicate_min_size, s, label(s));
-                }
-            });
-    });
     patterns(
         ui,
         i18n,

@@ -13,7 +13,7 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, tree: &Tree, id: NodeId) {
         let node = tree.node(id);
         let mut item = |ui: &mut Ui, label: &str, action: Action| {
             let icon = match label {
-                "action-scan-this" => crate::icons::SEARCH,
+                "action-scan-this" => crate::icons::FOLDER_OPEN,
                 "action-open" => crate::icons::OPEN,
                 "action-show-in-folder" => crate::icons::REVEAL,
                 "action-copy-path" => crate::icons::COPY,

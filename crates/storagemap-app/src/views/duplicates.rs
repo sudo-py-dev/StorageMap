@@ -13,6 +13,7 @@ use storagemap_core::duplicates::{self, DuplicateGroup, DuplicateProgress, Keep}
 use storagemap_core::export::{Delimited, ReportWriter, Value};
 use storagemap_core::{Flags, NodeId, Tree};
 
+use super::relative_path;
 use super::table::{self, Col, TableSource};
 use super::{Env, ScanView, node_menu};
 use crate::app::Action;
@@ -255,15 +256,6 @@ pub fn is_running(scan: &ScanView) -> bool {
     }
 }
 
-/// Path of `id` below the scanned folder, e.g. `Photos/beach.jpg`.
-fn relative_path(tree: &Tree, id: NodeId) -> String {
-    let full = tree.path(id);
-    full.strip_prefix(tree.root_path())
-        .unwrap_or(&full)
-        .to_string_lossy()
-        .into_owned()
-}
-
 fn start(
     scan: &ScanView,
     min_size: u64,
@@ -452,14 +444,6 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
             {
                 env.push(Action::SetDuplicateSha256(sha));
             }
-            let scope = scan.tree.path(scan.focus).to_string_lossy().into_owned();
-            let weak = ui.visuals().weak_text_color();
-            elided_label(
-                ui,
-                env.i18n,
-                &env.i18n.la("dup-scope", &[("path", scope.into())]),
-                weak,
-            );
         }
     });
     if restart {
@@ -475,7 +459,7 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         }
     }
     ui.add_space(4.0);
-    let scanning = scan.scanning;
+    let (scanning, focus) = (scan.scanning, scan.focus);
     let ScanView {
         tree,
         duplicates: state,
@@ -497,8 +481,18 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
         State::Done(found) => found,
     };
     let (rows, wasted) = rows(tree, &found.groups);
+    if rows.is_empty() && found.errors == 0 {
+        empty_state(
+            ui,
+            env.i18n,
+            crate::icons::DUPLICATES,
+            "dup-none",
+            "dup-none-hint",
+            |_| {},
+        );
+        return;
+    }
     row(ui, dir, |ui| {
-        let scope = tree.path(found.root).to_string_lossy().into_owned();
         let groups_text = env.i18n.count(
             "dup-groups",
             rows.iter().filter(|r| matches!(r, Row::Group(_))).count() as u64,
@@ -513,13 +507,18 @@ pub fn show(ui: &mut Ui, env: &mut Env<'_>, scan: &mut ScanView) {
                 env.i18n.v(&env.i18n.count("scan-errors", found.errors)),
             );
         }
-        let weak = ui.visuals().weak_text_color();
-        elided_label(
-            ui,
-            env.i18n,
-            &env.i18n.la("dup-scope", &[("path", scope.into())]),
-            weak,
-        );
+        // The breadcrumbs already name the folder in view; say so only when
+        // these results are for another one.
+        if found.root != focus {
+            let scope = tree.path(found.root).to_string_lossy().into_owned();
+            let weak = ui.visuals().weak_text_color();
+            elided_label(
+                ui,
+                env.i18n,
+                &env.i18n.la("dup-scope", &[("path", scope.into())]),
+                weak,
+            );
+        }
     });
     if rows.is_empty() {
         ui.weak(env.t("dup-none"));

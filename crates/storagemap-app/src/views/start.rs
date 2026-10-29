@@ -296,10 +296,17 @@ fn recent_row(ui: &mut Ui, env: &mut Env<'_>, path: &std::path::Path) {
     ui.painter().rect_filled(rect, theme::RADIUS, fill);
     let text = rect.shrink2(vec2(10.0, 0.0));
     let label = format!("{}  {}", crate::icons::FOLDER, path.display());
+    // Long paths stop short of the chevron instead of running under it.
+    const CHEVRON_ROOM: f32 = 24.0;
+    let label_rect = if env.i18n.is_rtl() {
+        Rect::from_min_max(pos2(text.min.x + CHEVRON_ROOM, text.min.y), text.max)
+    } else {
+        Rect::from_min_max(text.min, pos2(text.max.x - CHEVRON_ROOM, text.max.y))
+    };
     paint_text(
         ui.painter(),
         env.i18n,
-        text,
+        label_rect,
         &label,
         FontId::proportional(14.0),
         visuals.text_color(),

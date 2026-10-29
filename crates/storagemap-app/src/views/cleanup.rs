@@ -178,11 +178,7 @@ fn item(ui: &mut Ui, env: &mut Env<'_>, tree: &Tree, id: NodeId, size: u64) {
     const CONTROLS_WIDTH: f32 = 290.0;
     let dir = env.i18n.dir();
     let full = tree.path(id);
-    let shown = full
-        .strip_prefix(tree.root_path())
-        .unwrap_or(&full)
-        .to_string_lossy()
-        .into_owned();
+    let shown = super::relative_path(tree, id);
     let (rect, _) = ui.allocate_exact_size(
         egui::vec2(ui.available_width(), ROW_HEIGHT),
         egui::Sense::hover(),

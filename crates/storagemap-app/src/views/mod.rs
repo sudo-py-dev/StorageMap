@@ -170,6 +170,17 @@ impl Tab {
     }
 }
 
+/// Path of `id` below the scanned folder, e.g. `Photos/beach.jpg`; the
+/// scanned folder itself is shown by name.
+pub(super) fn relative_path(tree: &Tree, id: NodeId) -> String {
+    let full = tree.path(id);
+    match full.strip_prefix(tree.root_path()) {
+        Ok(rel) if rel.as_os_str().is_empty() => tree.name(id).to_string(),
+        Ok(rel) => rel.to_string_lossy().into_owned(),
+        Err(_) => full.to_string_lossy().into_owned(),
+    }
+}
+
 /// A cached computation, valid while its key matches.
 pub struct Cached<K, V> {
     key: Option<K>,

@@ -298,7 +298,7 @@ fn help_menu(app: &mut App, ui: &mut Ui) {
             if ui
                 .button(format!(
                     "{}  {}",
-                    crate::icons::RESCAN,
+                    crate::icons::UPDATE,
                     i.t("action-check-updates")
                 ))
                 .clicked()
@@ -386,7 +386,7 @@ fn toolbar(app: &mut App, ui: &mut Ui) {
                     .button(format!(
                         "{}  {}",
                         crate::icons::EXPORT,
-                        i18n.t("action-export-short")
+                        i18n.t("action-export-csv")
                     ))
                     .on_hover_text(i18n.t("action-export-hint"))
                     .clicked()
@@ -494,7 +494,9 @@ pub fn update_banner(app: &mut App, ui: &mut Ui) {
 
 /// One tab per open scan, with a button to open another.
 pub fn scan_tabs(app: &mut App, ui: &mut Ui) {
-    if app.tab_count() == 0 {
+    // A single scan on screen has nothing to switch to; the toolbar opens
+    // another and File › Home returns to the start screen.
+    if app.tab_count() == 0 || (app.tab_count() == 1 && app.scan.is_some()) {
         return;
     }
     let frame = bar_frame(ui).inner_margin(Margin::symmetric(8, 4));
@@ -582,11 +584,14 @@ fn scan_tab(
 }
 
 pub fn status_bar(app: &mut App, ui: &mut Ui) {
+    // Before a scan there is no status to show.
+    if app.scan.is_none() {
+        return;
+    }
     let frame = bar_frame(ui).inner_margin(Margin::symmetric(10, 3));
     Panel::bottom("status").frame(frame).show(ui, |ui| {
         row(ui, app.i18n.dir(), |ui| {
             let Some(scan) = &app.scan else {
-                ui.weak(format!("StorageMap {}", env!("CARGO_PKG_VERSION")));
                 return;
             };
             let i = &app.i18n;
@@ -909,7 +914,10 @@ fn breadcrumbs(ui: &mut Ui, env: &mut Env<'_>, scan: &ScanView) {
             .strong()
             .color(theme::ACCENT_BRIGHT);
         ui.with_layout(env.i18n.dir().end_row(), |ui| {
-            ui.label(size);
+            // At the top the folder panel already shows the total.
+            if scan.focus != scan.tree.root() {
+                ui.label(size);
+            }
             egui::ScrollArea::horizontal()
                 .id_salt("crumbs")
                 .show(ui, |ui| {

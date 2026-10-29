@@ -164,7 +164,7 @@ saved scan works too: `storagemap scan.smap`.
 
 ## Privacy
 
-Everything runs on your computer. Your scans, snapshots and duplicate
+Everything runs on your computer. Your scans, saved scans and duplicate
 searches never leave it. The only network request StorageMap makes is the
 daily update check, which asks GitHub whether a newer version exists. You
 can turn it off in *Settings → Updates*.
