@@ -47,10 +47,12 @@ impl TableSource for EntryList<'_> {
             2 => table::text(ui, env, &env.metric_text(self.tree.node(id)), true),
             4 => table::text(ui, env, &fmt::date(self.tree.node(id).modified), true),
             _ => {
+                // Below the scanned folder: the full path repeats the same
+                // prefix on every row and hides the part that differs.
                 let parent = self
                     .tree
                     .parent(id)
-                    .map(|p| self.tree.path(p).to_string_lossy().into_owned())
+                    .map(|p| super::relative_path(self.tree, p))
                     .unwrap_or_default();
                 table::text(ui, env, &parent, false);
             }

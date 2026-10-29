@@ -118,16 +118,23 @@ pub enum Tab {
 }
 
 impl Tab {
+    /// Tabs grouped by purpose: see the space, free it, explore it.
+    pub const GROUPS: [&[Tab]; 3] = [
+        &[Tab::Treemap, Tab::Chart, Tab::Details],
+        &[Tab::Cleanup, Tab::TopFiles, Tab::Duplicates],
+        &[Tab::Types, Tab::Ages, Tab::Changes, Tab::Search],
+    ];
+
     pub const ALL: [Tab; 10] = [
         Tab::Treemap,
         Tab::Chart,
         Tab::Details,
         Tab::Cleanup,
         Tab::TopFiles,
+        Tab::Duplicates,
         Tab::Types,
         Tab::Ages,
         Tab::Changes,
-        Tab::Duplicates,
         Tab::Search,
     ];
 
@@ -160,6 +167,17 @@ impl Tab {
             Tab::Cleanup => "tab-cleanup",
             Tab::Chart => "tab-chart",
         }
+    }
+}
+
+/// Path of `id` below the scanned folder, e.g. `Photos/beach.jpg`; the
+/// scanned folder itself is shown by name.
+pub(super) fn relative_path(tree: &Tree, id: NodeId) -> String {
+    let full = tree.path(id);
+    match full.strip_prefix(tree.root_path()) {
+        Ok(rel) if rel.as_os_str().is_empty() => tree.name(id).to_string(),
+        Ok(rel) => rel.to_string_lossy().into_owned(),
+        Err(_) => full.to_string_lossy().into_owned(),
     }
 }
 

@@ -11,7 +11,7 @@ use crate::fmt::Unit;
 use crate::i18n::Lang;
 
 pub const STORAGE_KEY: &str = "storagemap.settings.v1";
-const MAX_RECENT: usize = 8;
+const MAX_RECENT: usize = 5;
 pub const MAX_TREEMAP_DEPTH: u8 = 12;
 pub const DEFAULT_DUPLICATE_MIN_SIZE: u64 = 1024 * 1024;
 
@@ -126,11 +126,18 @@ impl Default for Settings {
             export_depth: None,
             export_columns: Vec::new(),
             scan_filter: ScanFilter::default(),
-            hidden_columns: BTreeMap::new(),
+            hidden_columns: default_hidden_columns(),
             column_order: BTreeMap::new(),
             saved_searches: Vec::new(),
         }
     }
+}
+
+/// Details columns few people need, hidden until asked for from the
+/// header's right-click menu.
+fn default_hidden_columns() -> BTreeMap<String, Vec<String>> {
+    let details = ["col-accessed", "col-created", "col-attributes", "col-owner"];
+    BTreeMap::from([("details".to_owned(), details.map(str::to_owned).to_vec())])
 }
 
 impl Settings {
@@ -156,9 +163,12 @@ impl Settings {
         }
     }
 
-    /// Shows every column of `table` again, in the default order.
+    /// Puts the columns of `table` back to their default set and order.
     pub fn reset_columns(&mut self, table: &str) {
-        self.hidden_columns.remove(table);
+        match default_hidden_columns().remove(table) {
+            Some(cols) => self.hidden_columns.insert(table.to_owned(), cols),
+            None => self.hidden_columns.remove(table),
+        };
         self.column_order.remove(table);
     }
 
@@ -199,7 +209,7 @@ mod tests {
         assert!(!s.column_hidden("search", "col-type"));
         s.toggle_column("details", "col-type");
         assert!(!s.column_hidden("details", "col-type"));
-        assert!(s.hidden_columns.is_empty());
+        assert_eq!(s.hidden_columns, Settings::default().hidden_columns);
     }
 
     #[test]
