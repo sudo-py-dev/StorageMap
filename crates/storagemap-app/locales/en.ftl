@@ -24,6 +24,7 @@ export-format-excel = Excel
 export-format-html = Web page
 export-format-json = JSON
 export-format-text = Text
+export-more = More options
 export-depth = Folder levels
 export-depth-levels =
     { $count ->

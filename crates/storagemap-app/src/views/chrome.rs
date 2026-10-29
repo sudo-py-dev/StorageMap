@@ -1095,12 +1095,30 @@ fn export_options(app: &mut App, ctx: &egui::Context) {
         i18n: i,
         settings,
         actions,
+        scan,
         ..
     } = app;
+    let Some(scan) = scan.as_ref() else { return };
     let modal = Modal::new(Id::unique("export-options")).show(ctx, |ui| {
         ui.set_width(440.0);
         ui.with_layout(Layout::top_down(i.dir().start()), |ui| {
-            ui.heading(format!("{}  {}", crate::icons::EXPORT, i.t("export-title")));
+            row(ui, i.dir(), |ui| {
+                ui.heading(format!("{}  {}", crate::icons::EXPORT, i.t("export-title")));
+                ui.with_layout(i.dir().end_row(), |ui| {
+                    if icon_button(ui, crate::icons::CLOSE, &i.t("action-close")).clicked() {
+                        actions.push(Action::CancelExport);
+                    }
+                });
+            });
+            // What gets exported: the folder in view, not the whole scan.
+            // Its name, which a long path would elide; the path on hover.
+            let path = scan.tree.path(scan.focus);
+            let name = path
+                .file_name()
+                .map_or_else(|| path.to_string_lossy(), |n| n.to_string_lossy());
+            let weak = ui.visuals().weak_text_color();
+            crate::widgets::elided_label(ui, i, &format!("{}  {name}", crate::icons::FOLDER), weak)
+                .on_hover_text(i.v(&path.to_string_lossy()));
             ui.add_space(8.0);
             ui.label(RichText::new(i.t("export-format")).strong());
             let layout = i.dir().row().with_main_wrap(true);
@@ -1116,76 +1134,54 @@ fn export_options(app: &mut App, ctx: &egui::Context) {
                 }
             });
             ui.add_space(8.0);
-            ui.label(RichText::new(i.t("export-depth")).strong());
             let depth_text = |d: Option<u8>| match d {
                 Some(n) => i.ta("export-depth-levels", &[("count", u64::from(n).into())]),
                 None => i.t("export-depth-all"),
             };
-            egui::ComboBox::from_id_salt("export-depth")
-                .selected_text(depth_text(settings.export_depth))
-                .show_ui(ui, |ui| {
-                    for d in [Some(1), Some(2), Some(3), Some(5), None] {
-                        ui.selectable_value(&mut settings.export_depth, d, depth_text(d));
-                    }
-                });
-            ui.add_space(8.0);
-            ui.label(RichText::new(i.t("export-columns")).strong());
-            ui.allocate_ui_with_layout(vec2(ui.available_width(), 0.0), layout, |ui| {
-                let all: Vec<usize> = (0..storagemap_core::export::COLUMN_KEYS.len()).collect();
-                if settings.export_columns.is_empty() {
-                    settings.export_columns = all.clone();
-                }
-                for (c, id) in all.into_iter().zip([
-                    "col-path",
-                    "col-type",
-                    "col-size",
-                    "col-allocated",
-                    "col-files",
-                    "col-folders",
-                    "col-percent",
-                    "col-modified",
-                ]) {
-                    let mut on = settings.export_columns.contains(&c);
-                    // The path identifies each row, so it always stays.
-                    let enabled = c != 0;
-                    if ui
-                        .add_enabled(enabled, egui::Checkbox::new(&mut on, i.t(id)))
-                        .changed()
-                    {
-                        if on {
-                            settings.export_columns.push(c);
-                            settings.export_columns.sort_unstable();
-                        } else {
-                            settings.export_columns.retain(|&x| x != c);
-                        }
-                    }
-                }
-            });
-            ui.add_space(8.0);
-            ui.label(RichText::new(i.t("export-include")).strong());
+            let include_ids = [
+                "export-include-all",
+                "export-include-folders",
+                "export-include-files",
+            ];
+            let include_id = |include: Include| {
+                Include::ALL
+                    .into_iter()
+                    .zip(include_ids)
+                    .find_map(|(x, id)| (x == include).then_some(id))
+                    .unwrap_or(include_ids[0])
+            };
+            // Most exports only need a format; the rest waits behind a toggle
+            // that sums up the current choices.
+            let more_id = Id::unique("export-more-options");
+            let mut more = ui.data(|d| d.get_temp(more_id).unwrap_or(false));
             row(ui, i.dir(), |ui| {
-                for (include, id) in Include::ALL.into_iter().zip([
-                    "export-include-all",
-                    "export-include-folders",
-                    "export-include-files",
-                ]) {
-                    ui.selectable_value(&mut settings.export_include, include, i.t(id));
+                let label = format!("{}  {}", crate::icons::FILTER, i.t("export-more"));
+                ui.toggle_value(&mut more, label);
+                if !more {
+                    let sizes = if settings.export_readable {
+                        "export-sizes-readable"
+                    } else {
+                        "export-sizes-bytes"
+                    };
+                    // Joined in reading order, then laid out as one line.
+                    let depth = match settings.export_depth {
+                        Some(n) => i.la("export-depth-levels", &[("count", u64::from(n).into())]),
+                        None => i.logical("export-depth-all"),
+                    };
+                    let summary = [
+                        depth,
+                        i.logical(include_id(settings.export_include)),
+                        i.logical(sizes),
+                    ]
+                    .join(" · ");
+                    ui.weak(i.v(&summary));
                 }
             });
-            ui.add_space(8.0);
-            ui.label(RichText::new(i.t("export-sizes")).strong());
-            row(ui, i.dir(), |ui| {
-                ui.selectable_value(
-                    &mut settings.export_readable,
-                    true,
-                    i.t("export-sizes-readable"),
-                );
-                ui.selectable_value(
-                    &mut settings.export_readable,
-                    false,
-                    i.t("export-sizes-bytes"),
-                );
-            });
+            ui.data_mut(|d| d.insert_temp(more_id, more));
+            if more {
+                ui.add_space(6.0);
+                export_more_options(ui, i, settings, &depth_text, include_ids);
+            }
             ui.add_space(14.0);
             row(ui, i.dir(), |ui| {
                 if ui.add(theme::primary_button(i.t("export-save"))).clicked() {
@@ -1207,6 +1203,79 @@ fn export_options(app: &mut App, ctx: &egui::Context) {
     if modal.should_close() {
         actions.push(Action::CancelExport);
     }
+}
+
+/// Folder levels, rows, sizes and columns of the export.
+fn export_more_options(
+    ui: &mut Ui,
+    i: &crate::i18n::I18n,
+    settings: &mut crate::settings::Settings,
+    depth_text: &dyn Fn(Option<u8>) -> String,
+    include_ids: [&str; 3],
+) {
+    ui.label(RichText::new(i.t("export-depth")).strong());
+    egui::ComboBox::from_id_salt("export-depth")
+        .selected_text(depth_text(settings.export_depth))
+        .show_ui(ui, |ui| {
+            for d in [Some(1), Some(2), Some(3), Some(5), None] {
+                ui.selectable_value(&mut settings.export_depth, d, depth_text(d));
+            }
+        });
+    ui.add_space(8.0);
+    ui.label(RichText::new(i.t("export-include")).strong());
+    row(ui, i.dir(), |ui| {
+        for (include, id) in Include::ALL.into_iter().zip(include_ids) {
+            ui.selectable_value(&mut settings.export_include, include, i.t(id));
+        }
+    });
+    ui.add_space(8.0);
+    ui.label(RichText::new(i.t("export-sizes")).strong());
+    row(ui, i.dir(), |ui| {
+        ui.selectable_value(
+            &mut settings.export_readable,
+            true,
+            i.t("export-sizes-readable"),
+        );
+        ui.selectable_value(
+            &mut settings.export_readable,
+            false,
+            i.t("export-sizes-bytes"),
+        );
+    });
+    ui.add_space(8.0);
+    ui.label(RichText::new(i.t("export-columns")).strong());
+    let layout = i.dir().row().with_main_wrap(true);
+    ui.allocate_ui_with_layout(vec2(ui.available_width(), 0.0), layout, |ui| {
+        let all: Vec<usize> = (0..storagemap_core::export::COLUMN_KEYS.len()).collect();
+        if settings.export_columns.is_empty() {
+            settings.export_columns = all.clone();
+        }
+        // The path (column 0) identifies each row, so it is always included
+        // and not offered here.
+        for (c, id) in all.into_iter().zip([
+            "col-path",
+            "col-type",
+            "col-size",
+            "col-allocated",
+            "col-files",
+            "col-folders",
+            "col-percent",
+            "col-modified",
+        ]) {
+            if c == 0 {
+                continue;
+            }
+            let mut on = settings.export_columns.contains(&c);
+            if ui.checkbox(&mut on, i.t(id)).changed() {
+                if on {
+                    settings.export_columns.push(c);
+                    settings.export_columns.sort_unstable();
+                } else {
+                    settings.export_columns.retain(|&x| x != c);
+                }
+            }
+        }
+    });
 }
 
 /// The floating notification: fades and slides in at the bottom centre.

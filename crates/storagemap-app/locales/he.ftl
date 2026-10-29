@@ -24,6 +24,7 @@ export-format-excel = Excel
 export-format-html = דף אינטרנט
 export-format-json = JSON
 export-format-text = טקסט
+export-more = אפשרויות נוספות
 export-depth = רמות תיקיות
 export-depth-levels =
     { $count ->
