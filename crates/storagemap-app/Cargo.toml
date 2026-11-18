@@ -22,7 +22,7 @@ fluent-bundle = "0.16"
 unic-langid = { version = "0.9", features = ["macros"] }
 sys-locale = "0.3"
 unicode-bidi = "0.3"
-rfd = "0.17"
+rfd = "0.18"
 trash = "5"
 open = "5"
 semver = "1"
